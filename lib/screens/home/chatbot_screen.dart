@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -11,16 +12,52 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
 
-  void _sendMessage() {
+  // A variable to show a loading indicator while we wait for the API response.
+  bool _isLoading = false;
+
+  // IMPORTANT: Replace this with your actual API key from Google AI Studio
+  static const String _apiKey = "AIzaSyA9TbKqGXyNdnFqovfE7Lj3y-qpYcMlI6g";
+
+  // Initialize the Generative AI Model
+
+  final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _apiKey);
+
+  // The _sendMessage function is now an "async" function to handle the API call
+  void _sendMessage() async {
     if (_controller.text.isNotEmpty) {
+      final userMessage = _controller.text;
+
+      // Add the user's message to the UI
       setState(() {
-        _messages.add({'sender': 'user', 'text': _controller.text});
-        _messages.add({
-          'sender': 'bot',
-          'text': 'This is a simulated response. How can I help you today?'
-        });
-        _controller.clear();
+        _messages.add({'sender': 'user', 'text': userMessage});
+        _isLoading = true; // Show the loading indicator
       });
+
+      _controller.clear(); // Clear the input field
+
+      try {
+        // Send the message to the Gemini API
+        final content = [Content.text(userMessage)];
+        final response = await model.generateContent(content);
+        
+        // Add the bot's response to the UI
+        setState(() {
+          _messages.add({'sender': 'bot', 'text': response.text ?? "Sorry, I couldn't respond."});
+        });
+
+      } catch (e) {
+        // Handle any errors that might occur during the API call
+        setState(() {
+          _messages.add({'sender': 'bot', 'text': 'Oops! Something went wrong. Please try again.'});
+        });
+        // You can also print the error to the console for debugging
+        print("Error: $e");
+      } finally {
+        // Hide the loading indicator once we have a response or an error
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -28,7 +65,6 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // --- CHANGED HERE ---
         title: const Text('YouMii Assistant'),
       ),
       body: Column(
@@ -57,6 +93,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               },
             ),
           ),
+
+          // A widget to show the loading indicator
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: CircularProgressIndicator(),
+            ),
+
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -68,11 +112,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                       hintText: 'Type your message...',
                       border: OutlineInputBorder(),
                     ),
+                    // Don't allow typing while the bot is thinking
+                    enabled: !_isLoading, 
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed: _sendMessage,
+                  // Disable the send button while waiting for a response
+                  onPressed: _isLoading ? null : _sendMessage, 
                 ),
               ],
             ),
