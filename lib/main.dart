@@ -1,9 +1,22 @@
-import 'package:flutter/material.dart';
-// import 'screens/auth/login_screen.dart';        // <-- 1. COMMENT OUT THIS LINE
-// import 'screens/auth/registration_screen.dart'; // <-- 2. COMMENT OUT THIS LINE
-import 'screens/home/home_screen.dart';         // <-- This one is okay because you have it
+// lib/main.dart
 
-void main() {
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:youmii/firebase_options.dart';
+
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/registration_screen.dart';
+import 'screens/home/home_screen.dart';
+
+void main() async {
+  // Ensure Flutter is initialized before we run async code.
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase using the generated firebase_options.dart file.
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const MyApp());
 }
 
@@ -17,21 +30,24 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.teal,
         visualDensity: VisualDensity.adaptivePlatformDensity,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
       ),
-      
-      // --- CHANGES ARE HERE ---
-
-      // initialRoute: '/login', // <-- 3. COMMENT OUT the initial route
-      
-      // 4. INSTEAD, use the 'home' property to go straight to HomeScreen
-      home: HomeScreen(),
-
-      // We can leave the routes for later, or comment them out too.
-      // routes: {
-      //   '/login': (context) => LoginScreen(),
-      //   '/register': (context) => RegistrationScreen(),
-      //   '/home': (context) => HomeScreen(),
-      // },
+      // Set the initial screen to the login page.
+      initialRoute: '/login',
+      // Define all the navigation routes for the app.
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegistrationScreen(),
+        '/home': (context) => const HomeScreen(),
+      },
     );
   }
 }
