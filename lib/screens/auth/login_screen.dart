@@ -15,9 +15,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final _auth = FirebaseAuth.instance;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(); // Remove .instance for older versions
 
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    // Remove initialize() call for older versions
+  }
 
   @override
   void dispose() {
@@ -55,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // GOOGLE SIGN-IN LOGIC for older google_sign_in versions (pre-7.0.0)
   Future<void> _handleGoogleLogin() async {
     if (!mounted) return;
     setState(() {
@@ -63,16 +71,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // 1. Get the singleton instance of GoogleSignIn
-      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
-
-      // 2. Initialize the plugin (REQUIRED in v7.0+)
-      await googleSignIn.initialize();
-
-      // 3. Start the interactive sign-in process using 'authenticate'
-      final GoogleSignInAccount? googleUser = await googleSignIn.authenticate(
-        scopeHint: ['email', 'profile'],
-      );
+      // Start the interactive sign-in process
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
         // The user canceled the sign-in process
@@ -80,35 +80,27 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // 4. Obtain the authentication details from the request
+      // Obtain the authentication details
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-      // 5. Extract the nullable tokens (required for null safety)
-      final String? accessToken = googleAuth.accessToken;
-      final String? idToken = googleAuth.idToken;
-
-      // 6. A critical check: Ensure tokens are not null
-      if (accessToken == null || idToken == null) {
-        throw Exception('Failed to retrieve authentication tokens from Google.');
-      }
-
-      // 7. Create a new credential for Firebase
+      // Create a new credential for Firebase
       final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: accessToken,
-        idToken: idToken,
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
       );
 
-      // 8. Sign in to Firebase with the credential
+      // Sign in to Firebase with the credential
       await FirebaseAuth.instance.signInWithCredential(credential);
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
 
-    } catch (e) {
-      String message = 'An unexpected error occurred.';
-      // Check for specific error types if needed
-      if (e is GoogleSignInException) {
-        message = 'Google Sign-In failed. Please try again.';
+    } on FirebaseAuthException catch (e) {
+      String message = 'Authentication failed. Please try again.';
+      if (e.code == 'account-exists-with-different-credential') {
+        message = 'An account already exists with the same email address.';
+      } else if (e.code == 'invalid-credential') {
+        message = 'Invalid authentication credentials.';
       }
 
       if (mounted) {
@@ -116,7 +108,15 @@ class _LoginScreenState extends State<LoginScreen> {
           _errorMessage = message;
         });
       }
-      print("Google Sign-In Error: $e"); // For debugging
+      print("Firebase Auth Error: $e");
+    } catch (e) {
+      String message = 'An unexpected error occurred. Please try again.';
+      if (mounted) {
+        setState(() {
+          _errorMessage = message;
+        });
+      }
+      print("Google Sign-In Error: $e");
     } finally {
       if (mounted) {
         setState(() {
@@ -176,14 +176,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 const SizedBox(height: 16.0),
-                ElevatedButton.icon(
-                  icon: Image.asset('assets/google_logo.png', height: 24.0),
-                  label: const Text('Sign in with Google'),
+                ElevatedButton(
                   onPressed: _isLoading ? null : _handleGoogleLogin,
                   style: ElevatedButton.styleFrom(
                     foregroundColor: Colors.black, backgroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
+                  child: const Text('Sign in with Google'),
                 ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
