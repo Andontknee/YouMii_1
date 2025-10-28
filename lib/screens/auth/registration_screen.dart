@@ -11,15 +11,11 @@ class RegistrationScreen extends StatefulWidget {
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
-  // Firebase instance
   final _auth = FirebaseAuth.instance;
-
-  // Text field controllers
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
 
-  // State variables
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -32,6 +28,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   Future<void> _handleRegistration() async {
+    // ... Firebase logic remains the same
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -39,27 +36,23 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     });
 
     try {
-      // Create the user with email and password
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // Update the user's profile with the display name
       if (userCredential.user != null) {
         await userCredential.user!.updateDisplayName(_usernameController.text.trim());
       }
 
       if (!mounted) return;
 
-      // Show a success message and pop back to the login screen
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Registration successful! Please log in.')),
       );
       Navigator.pop(context);
 
     } on FirebaseAuthException catch (e) {
-      // Handle specific Firebase errors
       if (e.code == 'weak-password') {
         _errorMessage = 'The password provided is too weak.';
       } else if (e.code == 'email-already-in-use') {
@@ -83,57 +76,105 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFF121212), // Dark background color
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: const IconThemeData(color: Colors.white), // White back arrow
       ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Text('Create Account', textAlign: TextAlign.center, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Create an Account',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
                 const SizedBox(height: 8),
-                Text('Start your wellness journey today.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                Text(
+                  'Begin your journey with YouMii',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                ),
                 const SizedBox(height: 48.0),
                 TextField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder()),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Enter Username',
+                    labelStyle: TextStyle(color: Colors.grey[400]),
+                    prefixIcon: Icon(Icons.person_outline, color: Colors.grey[400]),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey[700]!),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFF8A64E5)),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16.0),
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder()),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Enter Email',
+                    labelStyle: TextStyle(color: Colors.grey[400]),
+                    prefixIcon: Icon(Icons.email_outlined, color: Colors.grey[400]),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey[700]!),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFF8A64E5)),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16.0),
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline), border: OutlineInputBorder()),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Enter Password',
+                    labelStyle: TextStyle(color: Colors.grey[400]),
+                    prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[400]),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey[700]!),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFF8A64E5)),
+                    ),
+                  ),
                 ),
                 if (_errorMessage != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 16.0),
-                    child: Text(_errorMessage!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+                    child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent), textAlign: TextAlign.center),
                   ),
                 const SizedBox(height: 24.0),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _handleRegistration,
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('Sign Up', style: TextStyle(fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: const Color(0xFF8A64E5), // Lavender accent color
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                      : const Text('Sign Up', style: TextStyle(fontSize: 16, color: Colors.white)),
                 ),
+                const SizedBox(height: 32.0),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    const Text("Already have an account?"),
+                    Text("Already have an account?", style: TextStyle(color: Colors.grey[400])),
                     TextButton(
-                      child: const Text('Login'),
+                      child: const Text('Login', style: TextStyle(color: Color(0xFF8A64E5))),
                       onPressed: () {
                         Navigator.pop(context);
                       },
