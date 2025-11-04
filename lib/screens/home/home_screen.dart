@@ -2,11 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
-import 'journal_list_screen.dart';
+import 'notebooks_screen.dart';
 import 'profile_screen.dart';
 import 'chatbot_screen.dart';
 
-// The main HomeScreen widget with the bottom navigation.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -18,8 +17,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   static final List<Widget> _widgetOptions = <Widget>[
-    const HomeContent(), // The home screen content
-    JournalListScreen(),
+    const HomeContent(),
+    const NotebooksScreen(),
     DashboardScreen(),
     ProfileScreen(),
   ];
@@ -32,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // --- Now using the global Scaffold background color ---
     return Scaffold(
       body: Center(
         child: _widgetOptions.elementAt(_selectedIndex),
@@ -43,24 +43,24 @@ class _HomeScreenState extends State<HomeScreen> {
             MaterialPageRoute(builder: (context) => const ChatbotScreen()),
           );
         },
-        backgroundColor: Colors.teal, // Brand color for FAB
+        backgroundColor: Theme.of(context).primaryColor, // Use the lavender primary color
         foregroundColor: Colors.white,
         elevation: 2.0,
-        child: const Icon(Icons.hub_outlined), // Using a different icon for the AI
+        child: const Icon(Icons.hub_outlined),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8.0,
-        color: Colors.white, // Light color for the nav bar
-        elevation: 10.0, // Add a bit of shadow
+        color: Theme.of(context).cardColor, // Use the card color for the nav bar surface
+        elevation: 10.0,
         child: SizedBox(
           height: 60,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: <Widget>[
               _buildNavItem(icon: Icons.home, index: 0, label: 'Home'),
-              _buildNavItem(icon: Icons.book_outlined, index: 1, label: 'Journal'), // Changed icon
+              _buildNavItem(icon: Icons.book_outlined, index: 1, label: 'Journal'),
               const SizedBox(width: 40),
               _buildNavItem(icon: Icons.analytics_outlined, index: 2, label: 'Dashboard'),
               _buildNavItem(icon: Icons.person_outline, index: 3, label: 'Profile'),
@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return IconButton(
       icon: Icon(
         icon,
-        color: _selectedIndex == index ? Colors.teal : Colors.grey[500],
+        color: _selectedIndex == index ? Theme.of(context).primaryColor : Colors.grey[600],
       ),
       onPressed: () => _onItemTapped(index),
       tooltip: label,
@@ -84,60 +84,48 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 
-// --- THE HOME SCREEN CONTENT, NOW IN A LIGHT THEME ---
+// --- THE HOME SCREEN CONTENT (ADAPTED TO THEME) ---
 class HomeContent extends StatelessWidget {
   const HomeContent({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100], // Soft light grey background
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
           children: [
-            // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   'YouMii Ai',
-                  style: TextStyle(
-                    color: Colors.black87,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
                 ),
                 IconButton(
-                  icon: Icon(Icons.history_outlined, color: Colors.grey[600]),
+                  icon: Icon(Icons.history_outlined, color: theme.iconTheme.color),
                   onPressed: () { /* TODO: Implement chat history view */ },
                 ),
               ],
             ),
             const SizedBox(height: 30),
-
-            // Welcome Message
-            const Text(
+            Text(
               'Welcome, Anthony',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+              style: theme.textTheme.headlineLarge!.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 30),
-
-            // Weather Card
+            const _DailyFocusCard(),
+            const SizedBox(height: 20),
             const _WeatherCard(),
             const SizedBox(height: 20),
-
-            // AI Suggestion Card
             const _SuggestionCard(
               text: "Today's weather is slightly hotter than usual, may I remind you to drink more water?",
             ),
             const SizedBox(height: 20),
-
-            // Activity Suggestion Card
             const _ActivityCard(),
           ],
         ),
@@ -146,7 +134,53 @@ class HomeContent extends StatelessWidget {
   }
 }
 
-// --- HELPER WIDGETS WITH LIGHT THEME COLORS ---
+// --- NEW WIDGETS (ADAPTED TO THEME) ---
+class _DailyFocusCard extends StatelessWidget {
+  const _DailyFocusCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 4.0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.psychology_outlined, color: theme.primaryColor, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  'Daily Focus: Gratitude',
+                  style: theme.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[400]),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Pause now and intentionally list one small thing you are genuinely grateful for today.",
+              style: theme.textTheme.titleLarge!.copyWith(fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Focus added to journal!')));
+                },
+                icon: Icon(Icons.book_outlined, color: theme.primaryColor),
+                label: Text('Journal it Now', style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _WeatherCard extends StatelessWidget {
   const _WeatherCard();
@@ -156,11 +190,11 @@ class _WeatherCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withOpacity(0.3),
               spreadRadius: 2,
               blurRadius: 10,
             )
@@ -171,11 +205,11 @@ class _WeatherCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Now', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+              Text('Now', style: TextStyle(color: Colors.grey[400], fontSize: 16)),
               const SizedBox(height: 8),
-              const Text('35 °C', style: TextStyle(color: Colors.black, fontSize: 48, fontWeight: FontWeight.bold)),
+              const Text('35 °C', style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Passing clouds', style: TextStyle(color: Colors.black87, fontSize: 16)),
+              const Text('Passing clouds', style: TextStyle(fontSize: 16)),
             ],
           ),
           const Spacer(),
@@ -192,20 +226,21 @@ class _SuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome, color: Colors.teal, size: 24),
+          Icon(Icons.auto_awesome, color: theme.primaryColor, size: 24),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(color: Colors.grey[800], fontSize: 16, height: 1.5),
+              style: theme.textTheme.bodyLarge!.copyWith(height: 1.5),
             ),
           ),
         ],
@@ -219,10 +254,11 @@ class _ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -230,12 +266,12 @@ class _ActivityCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.directions_run_outlined, color: Colors.teal, size: 24),
+              Icon(Icons.directions_run_outlined, color: theme.primaryColor, size: 24),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
                   'May I suggest some activities for later in the evening?',
-                  style: TextStyle(color: Colors.grey[800], fontSize: 16, height: 1.5),
+                  style: theme.textTheme.bodyLarge!.copyWith(height: 1.5),
                 ),
               ),
             ],
@@ -265,16 +301,17 @@ class _ActivityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-          color: Colors.teal.withOpacity(0.1),
+          color: theme.primaryColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.teal.withOpacity(0.2))
+          border: Border.all(color: theme.primaryColor.withOpacity(0.4))
       ),
       child: Text(
         label,
-        style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.w500),
+        style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.w500),
       ),
     );
   }

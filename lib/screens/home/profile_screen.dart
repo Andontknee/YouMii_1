@@ -7,13 +7,16 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // --- USING THEME VARIABLES ---
     return Scaffold(
-      backgroundColor: Colors.grey[100], // Consistent light theme background
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Profile', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black), // For the back arrow
+        title: Text('Profile', style: theme.appBarTheme.titleTextStyle),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: theme.appBarTheme.elevation,
+        iconTheme: theme.iconTheme,
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
@@ -26,7 +29,7 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 const CircleAvatar(
                   radius: 60,
-                  // Placeholder image. We'll replace this with the user's uploaded image.
+                  // Placeholder image
                   backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=3'),
                 ),
                 Positioned(
@@ -34,15 +37,13 @@ class ProfileScreen extends StatelessWidget {
                   right: 0,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.teal,
+                      color: theme.primaryColor,
                       shape: BoxShape.circle,
-                      border: Border.all(width: 2, color: Colors.white),
+                      border: Border.all(width: 2, color: theme.scaffoldBackgroundColor),
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.edit, color: Colors.white, size: 20),
                       onPressed: () {
-                        // TODO: Implement image picker functionality
-                        // This will open the user's gallery or camera.
                         print('Change profile picture tapped');
                       },
                     ),
@@ -54,24 +55,17 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 20),
 
           // --- User Name and Email ---
-          const Center(
+          Center(
             child: Text(
               'Anthony LCM', // Placeholder for user's name
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
+              style: theme.textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 5),
           Center(
             child: Text(
               'anthony.lcm@email.com', // Placeholder for user's email
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
+              style: theme.textTheme.titleMedium!.copyWith(color: Colors.grey[500]),
             ),
           ),
           const SizedBox(height: 40),
@@ -105,14 +99,13 @@ class ProfileScreen extends StatelessWidget {
               // TODO: Navigate to Support Screen
             },
           ),
-          const Divider(height: 40),
+          const Divider(height: 40, color: Colors.grey),
           ProfileMenuItem(
             icon: Icons.logout_outlined,
             title: 'Logout',
-            textColor: Colors.red, // Make logout text red
+            textColor: Colors.redAccent, // Make logout text red
             onTap: () {
               // TODO: Implement logout functionality
-              // This will clear user session and navigate to login screen.
               Navigator.of(context).pushReplacementNamed('/login');
             },
           ),
@@ -139,7 +132,9 @@ class ProfileMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
+      color: theme.cardColor, // Use cardColor for the menu item background
       margin: const EdgeInsets.symmetric(vertical: 8.0),
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -147,13 +142,12 @@ class ProfileMenuItem extends StatelessWidget {
         leading: Icon(icon, color: textColor ?? Colors.grey[600]),
         title: Text(
           title,
-          style: TextStyle(
-            fontSize: 16,
+          style: theme.textTheme.titleMedium!.copyWith(
             fontWeight: FontWeight.w500,
-            color: textColor ?? Colors.black87,
+            color: textColor ?? Colors.white, // Ensure text is white
           ),
         ),
-        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[600]),
         onTap: onTap,
       ),
     );
