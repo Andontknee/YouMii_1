@@ -1,10 +1,39 @@
-// lib/screens/home/home_screen.dart
+// lib/screens/home/home_screen.dart (Final UI Fixes for Font Styles)
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'dashboard_screen.dart';
 import 'notebooks_screen.dart';
 import 'profile_screen.dart';
 import 'chatbot_screen.dart';
+
+// --- SERVICE IMPORTS (Assumed location) ---
+import '/models/perma_prompt.dart';
+import '/models/weather_forecast.dart';
+import '/services/quote_service.dart';
+// --- END SERVICE IMPORTS ---
+
+
+// --- MOOD LOG DATA STRUCTURE (Unchanged) ---
+class MoodItem {
+  final String emoji;
+  final String label;
+  final Color color;
+
+  MoodItem(this.emoji, this.label, this.color);
+
+  static final List<MoodItem> allMoods = [
+    MoodItem('😀', 'Fantastic', Colors.green),
+    MoodItem('😌', 'Calm', Colors.lightGreen),
+    MoodItem('😐', 'Neutral', Colors.yellow),
+    MoodItem('😔', 'Down', Colors.orange),
+    MoodItem('😥', 'Anxious', Colors.red),
+    MoodItem('😡', 'Angry', Colors.purple),
+  ];
+}
+// --- END MOOD LOG DATA STRUCTURE ---
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,8 +60,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // --- Now using the global Scaffold background color ---
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Center(
         child: _widgetOptions.elementAt(_selectedIndex),
       ),
@@ -43,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
             MaterialPageRoute(builder: (context) => const ChatbotScreen()),
           );
         },
-        backgroundColor: Theme.of(context).primaryColor, // Use the lavender primary color
+        backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
         elevation: 2.0,
         child: const Icon(Icons.hub_outlined),
@@ -52,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8.0,
-        color: Theme.of(context).cardColor, // Use the card color for the nav bar surface
+        color: theme.cardColor,
         elevation: 10.0,
         child: SizedBox(
           height: 60,
@@ -84,14 +115,94 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 
-// --- THE HOME SCREEN CONTENT (ADAPTED TO THEME) ---
-class HomeContent extends StatelessWidget {
+// --- THE HOME SCREEN CONTENT, DYNAMIC AND STATEFUL ---
+class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
+
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  late PermaPrompt _dailyPrompt;
+  TodayWeather? _weatherData;
+  Quote? _dailyQuote;
+  bool _isLoadingWeather = true;
+  bool _isLoadingQuote = true;
+  MoodItem? _selectedMood;
+
+  @override
+  void initState() {
+    super.initState();
+    _dailyPrompt = PermaPrompt.getRandomPrompt();
+    _fetchWeather();
+    _fetchQuote();
+  }
+
+  void _fetchWeather() async {
+    final service = WeatherService();
+    try {
+      final data = await service.fetchWeatherData();
+      if (mounted) {
+        setState(() {
+          _weatherData = data;
+        });
+      }
+    } catch (e) {
+      print('Error fetching weather: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingWeather = false;
+        });
+      }
+    }
+  }
+
+  void _fetchQuote() async {
+    final service = QuoteService();
+    try {
+      final quote = await service.fetchDailyQuote(); // NEW LINE: Use the caching function
+      if (mounted) {
+        setState(() {
+          _dailyQuote = quote;
+        });
+      }
+    } catch (e) {
+      print('Error fetching quote: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingQuote = false;
+        });
+      }
+    }
+  }
+
+  void _selectMood(MoodItem mood) {
+    setState(() {
+      _selectedMood = _selectedMood == mood ? null : mood;
+      if (_selectedMood != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Mood "${mood.label}" logged!')),
+        );
+      }
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+
+    // Logic for weather-based suggestions
+    String weatherSuggestion = 'Stay mindful and centered today.';
+    bool showWeatherSuggestion = false;
+
+    if (_weatherData != null && _weatherData!.currentTemp > 30) {
+      weatherSuggestion = "The temperature is high. Remember to prioritize hydration and stay cool.";
+      showWeatherSuggestion = true;
+    }
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -118,15 +229,36 @@ class HomeContent extends StatelessWidget {
               style: theme.textTheme.headlineLarge!.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 30),
-            const _DailyFocusCard(),
-            const SizedBox(height: 20),
-            const _WeatherCard(),
-            const SizedBox(height: 20),
-            const _SuggestionCard(
-              text: "Today's weather is slightly hotter than usual, may I remind you to drink more water?",
+
+            // --- DAILY FOCUS CARD ---
+            _isLoadingQuote
+                ? const Center(child: Padding(padding: EdgeInsets.all(16.0), child: LinearProgressIndicator()))
+                : _DailyFocusCard(
+              prompt: _dailyPrompt,
+              quote: _dailyQuote!,
             ),
             const SizedBox(height: 20),
-            const _ActivityCard(),
+
+            _MoodLogCard(
+              selectedMood: _selectedMood,
+              onMoodSelected: _selectMood,
+            ),
+            const SizedBox(height: 20),
+
+
+            // --- UNIFIED WEATHER CARD ---
+            _isLoadingWeather
+                ? const Center(child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ))
+                : _UnifiedWeatherCard(data: _weatherData),
+            const SizedBox(height: 20),
+
+            // --- WEATHER SUGGESTION CARD ---
+            if (showWeatherSuggestion)
+              _SuggestionCard(text: weatherSuggestion, icon: Icons.waves_outlined),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -134,9 +266,14 @@ class HomeContent extends StatelessWidget {
   }
 }
 
-// --- NEW WIDGETS (ADAPTED TO THEME) ---
+
+// --- WIDGETS ---
+
+// --- MODIFIED DAILY FOCUS CARD (SWAPPED FONT STYLES) ---
 class _DailyFocusCard extends StatelessWidget {
-  const _DailyFocusCard();
+  final PermaPrompt prompt;
+  final Quote quote;
+  const _DailyFocusCard({required this.prompt, required this.quote});
 
   @override
   Widget build(BuildContext context) {
@@ -145,34 +282,122 @@ class _DailyFocusCard extends StatelessWidget {
       elevation: 4.0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 1. PERMA FOCUS TITLE
             Row(
               children: [
-                Icon(Icons.psychology_outlined, color: theme.primaryColor, size: 24),
+                Icon(Icons.psychology_outlined, color: theme.primaryColor, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Daily Focus: Gratitude',
-                  style: theme.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[400]),
+                  'Daily Focus: ${prompt.title}',
+                  style: theme.textTheme.titleSmall!.copyWith(fontWeight: FontWeight.bold, color: Colors.grey[400]),
                 ),
               ],
             ),
             const SizedBox(height: 12),
+
+            // 2. PERMA PROMPT (Normal Font for clarity and instruction)
             Text(
-              "Pause now and intentionally list one small thing you are genuinely grateful for today.",
-              style: theme.textTheme.titleLarge!.copyWith(fontStyle: FontStyle.italic),
+              prompt.prompt,
+              style: theme.textTheme.titleMedium!.copyWith(fontStyle: FontStyle.normal),
             ),
+
             const SizedBox(height: 16),
+
+            // 3. JOURNAL BUTTON
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Focus added to journal!')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Journal link coming soon!')));
                 },
                 icon: Icon(Icons.book_outlined, color: theme.primaryColor),
                 label: Text('Journal it Now', style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white12),
+            const SizedBox(height: 8),
+
+            // 4. SUPPLEMENTAL QUOTE (Italic Font for inspirational style)
+            Text(
+              '"${quote.text}"',
+              style: theme.textTheme.bodyMedium!.copyWith(color: Colors.grey[400], fontStyle: FontStyle.italic),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text('- ${quote.author}', style: theme.textTheme.bodySmall!.copyWith(color: Colors.grey[500])),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+// --- END MODIFIED DAILY FOCUS CARD ---
+
+class _MoodLogCard extends StatelessWidget {
+  final MoodItem? selectedMood;
+  final Function(MoodItem) onMoodSelected;
+
+  const _MoodLogCard({required this.selectedMood, required this.onMoodSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 4.0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              selectedMood == null
+                  ? 'How do you feel about your current emotions?'
+                  : 'Mood Logged: ${selectedMood!.label}',
+              style: theme.textTheme.titleLarge!.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 60,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: MoodItem.allMoods.length,
+                itemBuilder: (context, index) {
+                  final mood = MoodItem.allMoods[index];
+                  final isSelected = mood == selectedMood;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                    child: InkWell(
+                      onTap: () => onMoodSelected(mood),
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        padding: const EdgeInsets.all(8.0),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: isSelected
+                              ? Border.all(color: theme.primaryColor, width: 3)
+                              : null,
+                          color: isSelected
+                              ? theme.primaryColor.withOpacity(0.1)
+                              : null,
+                        ),
+                        child: Text(
+                          mood.emoji,
+                          style: const TextStyle(fontSize: 40),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -182,65 +407,91 @@ class _DailyFocusCard extends StatelessWidget {
   }
 }
 
-class _WeatherCard extends StatelessWidget {
-  const _WeatherCard();
+class _UnifiedWeatherCard extends StatelessWidget {
+  final TodayWeather? data;
+  const _UnifiedWeatherCard({this.data});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isWarning = data != null && data!.warning.isNotEmpty;
+
+    final backgroundColor = isWarning ? Colors.red.shade900 : Colors.blue.shade600;
+
+    final location = data?.location ?? 'Kuala Lumpur';
+    final temp = data?.currentTemp.toString() ?? '--';
+    final condition = data?.condition ?? 'Partly Cloudy';
+    final warning = data?.warning ?? '';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withOpacity(0.5),
               spreadRadius: 2,
               blurRadius: 10,
             )
           ]
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
+          // --- TOP SECTION (Location, Temp, Warning) ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Now', style: TextStyle(color: Colors.grey[400], fontSize: 16)),
-              const SizedBox(height: 8),
-              const Text('35 °C', style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Passing clouds', style: TextStyle(fontSize: 16)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(location, style: theme.textTheme.titleMedium!.copyWith(color: Colors.white70)),
+                  const SizedBox(height: 4),
+                  Text('$temp°', style: theme.textTheme.displayLarge!.copyWith(color: Colors.white, fontWeight: FontWeight.w300, height: 1.0)),
+                  const SizedBox(height: 4),
+                  Text(condition, style: theme.textTheme.titleMedium!.copyWith(color: Colors.white)),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Icon(data?.icon ?? Icons.wb_sunny, color: Colors.yellowAccent, size: 28),
+                  if (isWarning)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(warning, style: theme.textTheme.bodyMedium!.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              )
             ],
           ),
-          const Spacer(),
-          const Icon(Icons.wb_sunny_outlined, color: Colors.amber, size: 80),
-        ],
-      ),
-    );
-  }
-}
 
-class _SuggestionCard extends StatelessWidget {
-  final String text;
-  const _SuggestionCard({required this.text});
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white38),
+          const SizedBox(height: 8),
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.auto_awesome, color: theme.primaryColor, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodyLarge!.copyWith(height: 1.5),
+          // --- HOURLY/DAILY FORECAST STRIP ---
+          SizedBox(
+            height: 80,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: data?.forecastStrip.length ?? 0,
+              itemBuilder: (context, index) {
+                final item = data!.forecastStrip[index];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 20.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Text(item.time, style: theme.textTheme.bodyMedium!.copyWith(color: Colors.white70)),
+                      Icon(item.icon, size: 24, color: Colors.white),
+                      Text('${item.temp}°', style: theme.textTheme.bodyLarge!.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -249,8 +500,10 @@ class _SuggestionCard extends StatelessWidget {
   }
 }
 
-class _ActivityCard extends StatelessWidget {
-  const _ActivityCard();
+class _SuggestionCard extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  const _SuggestionCard({required this.text, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -261,57 +514,17 @@ class _ActivityCard extends StatelessWidget {
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.directions_run_outlined, color: theme.primaryColor, size: 24),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'May I suggest some activities for later in the evening?',
-                  style: theme.textTheme.bodyLarge!.copyWith(height: 1.5),
-                ),
-              ),
-            ],
+          Icon(icon, color: theme.primaryColor, size: 24),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodyLarge!.copyWith(height: 1.5),
+            ),
           ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 12.0,
-            runSpacing: 12.0,
-            children: const [
-              _ActivityChip(label: 'Cycling'),
-              _ActivityChip(label: 'Stretching'),
-              _ActivityChip(label: 'Yoga'),
-              _ActivityChip(label: '10 minute walk'),
-              _ActivityChip(label: 'Podcast'),
-              _ActivityChip(label: 'Reading'),
-            ],
-          )
         ],
-      ),
-    );
-  }
-}
-
-class _ActivityChip extends StatelessWidget {
-  final String label;
-  const _ActivityChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-          color: theme.primaryColor.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: theme.primaryColor.withOpacity(0.4))
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.w500),
       ),
     );
   }
