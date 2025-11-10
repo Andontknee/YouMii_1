@@ -1,4 +1,4 @@
-// lib/screens/home/home_screen.dart (Final UI Fixes for Font Styles)
+// lib/screens/home/home_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -8,14 +8,16 @@ import 'notebooks_screen.dart';
 import 'profile_screen.dart';
 import 'chatbot_screen.dart';
 
-// --- SERVICE IMPORTS (Assumed location) ---
+// --- FIREBASE AND SERVICE IMPORTS ---
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '/models/perma_prompt.dart';
 import '/models/weather_forecast.dart';
 import '/services/quote_service.dart';
 // --- END SERVICE IMPORTS ---
 
 
-// --- MOOD LOG DATA STRUCTURE (Unchanged) ---
+// --- MOOD LOG DATA STRUCTURE ---
 class MoodItem {
   final String emoji;
   final String label;
@@ -25,10 +27,9 @@ class MoodItem {
 
   static final List<MoodItem> allMoods = [
     MoodItem('😀', 'Fantastic', Colors.green),
-    MoodItem('😌', 'Calm', Colors.lightGreen),
-    MoodItem('😐', 'Neutral', Colors.yellow),
-    MoodItem('😔', 'Down', Colors.orange),
-    MoodItem('😥', 'Anxious', Colors.red),
+    MoodItem('😌', 'Calm', Colors.lightGreen), // New position, new label 'Calm'
+    MoodItem('😔', 'Sad', Colors.orange), // Anxious -> Sad (simplified emotion)
+    MoodItem('😭', 'Anxious', Colors.red), // Added Crying Emoji to separate sadness and anxiety visually
     MoodItem('😡', 'Angry', Colors.purple),
   ];
 }
@@ -134,6 +135,7 @@ class _HomeContentState extends State<HomeContent> {
   @override
   void initState() {
     super.initState();
+    // This now determines the PERMA category for the day
     _dailyPrompt = PermaPrompt.getRandomPrompt();
     _fetchWeather();
     _fetchQuote();
@@ -162,7 +164,7 @@ class _HomeContentState extends State<HomeContent> {
   void _fetchQuote() async {
     final service = QuoteService();
     try {
-      final quote = await service.fetchDailyQuote(); // NEW LINE: Use the caching function
+      final quote = await service.fetchDailyQuote();
       if (mounted) {
         setState(() {
           _dailyQuote = quote;
@@ -179,13 +181,66 @@ class _HomeContentState extends State<HomeContent> {
     }
   }
 
+  // --- NEW FIREBASE SAVE FUNCTION ---
+  Future<void> _saveMoodToFirebase(MoodItem mood) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Not logged in. Cannot save mood.')),
+      );
+      return;
+    }
+
+    final moodLogRef = FirebaseFirestore.instance.collection('mood_logs');
+    final todayString = DateTime.now().toIso8601String().substring(0, 10); // Format YYYY-MM-DD
+
+    try {
+      // 1. Query for today's entry by user and date
+      final querySnapshot = await moodLogRef
+          .where('userId', isEqualTo: user.uid)
+          .where('dateLogged', isEqualTo: todayString)
+          .limit(1)
+          .get();
+
+      final moodData = {
+        'userId': user.uid,
+        'moodEmoji': mood.emoji,
+        'moodLabel': mood.label,
+        'timestamp': FieldValue.serverTimestamp(), // Firestore automatically records the server time
+        'dateLogged': todayString, // Fixed format for easier querying
+      };
+
+      if (querySnapshot.docs.isNotEmpty) {
+        // 2. If entry exists, update it
+        await querySnapshot.docs.first.reference.update(moodData);
+      } else {
+        // 3. If entry doesn't exist, create it
+        await moodLogRef.add(moodData);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Mood "${mood.label}" logged and saved to history!')),
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save mood. Check console for error.')),
+      );
+      print("Firebase Mood Log Error: $e");
+    }
+  }
+
+
+  // --- UPDATED MOOD SELECTION LOGIC ---
   void _selectMood(MoodItem mood) {
     setState(() {
-      _selectedMood = _selectedMood == mood ? null : mood;
+      final isNewSelection = _selectedMood != mood;
+      _selectedMood = isNewSelection ? mood : null;
+
       if (_selectedMood != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Mood "${mood.label}" logged!')),
-        );
+        _saveMoodToFirebase(_selectedMood!); // Save on successful selection
       }
     });
   }
@@ -230,7 +285,6 @@ class _HomeContentState extends State<HomeContent> {
             ),
             const SizedBox(height: 30),
 
-            // --- DAILY FOCUS CARD ---
             _isLoadingQuote
                 ? const Center(child: Padding(padding: EdgeInsets.all(16.0), child: LinearProgressIndicator()))
                 : _DailyFocusCard(
@@ -246,7 +300,6 @@ class _HomeContentState extends State<HomeContent> {
             const SizedBox(height: 20),
 
 
-            // --- UNIFIED WEATHER CARD ---
             _isLoadingWeather
                 ? const Center(child: Padding(
               padding: EdgeInsets.all(16.0),
@@ -255,7 +308,6 @@ class _HomeContentState extends State<HomeContent> {
                 : _UnifiedWeatherCard(data: _weatherData),
             const SizedBox(height: 20),
 
-            // --- WEATHER SUGGESTION CARD ---
             if (showWeatherSuggestion)
               _SuggestionCard(text: weatherSuggestion, icon: Icons.waves_outlined),
             const SizedBox(height: 20),
@@ -269,7 +321,6 @@ class _HomeContentState extends State<HomeContent> {
 
 // --- WIDGETS ---
 
-// --- MODIFIED DAILY FOCUS CARD (SWAPPED FONT STYLES) ---
 class _DailyFocusCard extends StatelessWidget {
   final PermaPrompt prompt;
   final Quote quote;
@@ -286,7 +337,6 @@ class _DailyFocusCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. PERMA FOCUS TITLE
             Row(
               children: [
                 Icon(Icons.psychology_outlined, color: theme.primaryColor, size: 20),
@@ -298,16 +348,11 @@ class _DailyFocusCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-
-            // 2. PERMA PROMPT (Normal Font for clarity and instruction)
             Text(
               prompt.prompt,
               style: theme.textTheme.titleMedium!.copyWith(fontStyle: FontStyle.normal),
             ),
-
             const SizedBox(height: 16),
-
-            // 3. JOURNAL BUTTON
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
@@ -318,12 +363,9 @@ class _DailyFocusCard extends StatelessWidget {
                 label: Text('Journal it Now', style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
               ),
             ),
-
             const SizedBox(height: 16),
             const Divider(color: Colors.white12),
             const SizedBox(height: 8),
-
-            // 4. SUPPLEMENTAL QUOTE (Italic Font for inspirational style)
             Text(
               '"${quote.text}"',
               style: theme.textTheme.bodyMedium!.copyWith(color: Colors.grey[400], fontStyle: FontStyle.italic),
@@ -338,7 +380,6 @@ class _DailyFocusCard extends StatelessWidget {
     );
   }
 }
-// --- END MODIFIED DAILY FOCUS CARD ---
 
 class _MoodLogCard extends StatelessWidget {
   final MoodItem? selectedMood;
@@ -358,29 +399,33 @@ class _MoodLogCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- FIX 1: Font Scaling Fix ---
             Text(
               selectedMood == null
                   ? 'How do you feel about your current emotions?'
                   : 'Mood Logged: ${selectedMood!.label}',
-              style: theme.textTheme.titleLarge!.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold), // Reduced font size
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              height: 60,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: MoodItem.allMoods.length,
-                itemBuilder: (context, index) {
-                  final mood = MoodItem.allMoods[index];
-                  final isSelected = mood == selectedMood;
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6.0),
+            // --- FIX 2 & 3: Layout and Clipping Fix ---
+            // Using a simple Row, and wrapping all items inside it.
+            // Reduced emoji size from 40 to 30.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: MoodItem.allMoods.map((mood) {
+                final isSelected = mood == selectedMood;
+                return Expanded( // Ensures emojis divide the space equally
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
                     child: InkWell(
                       onTap: () => onMoodSelected(mood),
                       borderRadius: BorderRadius.circular(30),
                       child: Container(
-                        padding: const EdgeInsets.all(8.0),
+                        padding: const EdgeInsets.symmetric(vertical: 4.0), // Reduced vertical padding
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: isSelected
@@ -392,14 +437,15 @@ class _MoodLogCard extends StatelessWidget {
                         ),
                         child: Text(
                           mood.emoji,
-                          style: const TextStyle(fontSize: 40),
+                          style: const TextStyle(fontSize: 32), // Reduced emoji size
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              }).toList(),
             ),
+            // End of clipping fix
           ],
         ),
       ),
@@ -439,7 +485,6 @@ class _UnifiedWeatherCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- TOP SECTION (Location, Temp, Warning) ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,7 +517,6 @@ class _UnifiedWeatherCard extends StatelessWidget {
           const Divider(color: Colors.white38),
           const SizedBox(height: 8),
 
-          // --- HOURLY/DAILY FORECAST STRIP ---
           SizedBox(
             height: 80,
             child: ListView.builder(
