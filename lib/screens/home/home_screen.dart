@@ -1,8 +1,6 @@
 // lib/screens/home/home_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dashboard_screen.dart';
 import 'notebooks_screen.dart';
 import 'profile_screen.dart';
@@ -12,9 +10,12 @@ import 'chatbot_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '/models/perma_prompt.dart';
-import '/models/weather_forecast.dart';
 import '/services/quote_service.dart';
-// --- END SERVICE IMPORTS ---
+import '/models/activity_model.dart';
+
+import '../sessions/breathing_session.dart';
+import '../sessions/yoga_selection.dart';
+
 
 
 // --- MOOD LOG DATA STRUCTURE ---
@@ -27,9 +28,9 @@ class MoodItem {
 
   static final List<MoodItem> allMoods = [
     MoodItem('😀', 'Fantastic', Colors.green),
-    MoodItem('😌', 'Calm', Colors.lightGreen), // New position, new label 'Calm'
-    MoodItem('😔', 'Sad', Colors.orange), // Anxious -> Sad (simplified emotion)
-    MoodItem('😭', 'Anxious', Colors.red), // Added Crying Emoji to separate sadness and anxiety visually
+    MoodItem('😌', 'Calm', Colors.lightGreen),
+    MoodItem('😔', 'Sad', Colors.orange),
+    MoodItem('😭', 'Anxious', Colors.red),
     MoodItem('😡', 'Angry', Colors.purple),
   ];
 }
@@ -126,39 +127,16 @@ class HomeContent extends StatefulWidget {
 
 class _HomeContentState extends State<HomeContent> {
   late PermaPrompt _dailyPrompt;
-  TodayWeather? _weatherData;
   Quote? _dailyQuote;
-  bool _isLoadingWeather = true;
   bool _isLoadingQuote = true;
   MoodItem? _selectedMood;
+  final List<Activity> _dailyActivities = Activity.defaultActivities;
 
   @override
   void initState() {
     super.initState();
-    // This now determines the PERMA category for the day
     _dailyPrompt = PermaPrompt.getRandomPrompt();
-    _fetchWeather();
     _fetchQuote();
-  }
-
-  void _fetchWeather() async {
-    final service = WeatherService();
-    try {
-      final data = await service.fetchWeatherData();
-      if (mounted) {
-        setState(() {
-          _weatherData = data;
-        });
-      }
-    } catch (e) {
-      print('Error fetching weather: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingWeather = false;
-        });
-      }
-    }
   }
 
   void _fetchQuote() async {
@@ -181,21 +159,19 @@ class _HomeContentState extends State<HomeContent> {
     }
   }
 
-  // --- NEW FIREBASE SAVE FUNCTION ---
   Future<void> _saveMoodToFirebase(MoodItem mood) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Not logged in. Cannot save mood.')),
+        const SnackBar(content: Text('Testing Mode: Not logged in. Cannot save mood.')),
       );
       return;
     }
 
     final moodLogRef = FirebaseFirestore.instance.collection('mood_logs');
-    final todayString = DateTime.now().toIso8601String().substring(0, 10); // Format YYYY-MM-DD
+    final todayString = DateTime.now().toIso8601String().substring(0, 10);
 
     try {
-      // 1. Query for today's entry by user and date
       final querySnapshot = await moodLogRef
           .where('userId', isEqualTo: user.uid)
           .where('dateLogged', isEqualTo: todayString)
@@ -206,15 +182,13 @@ class _HomeContentState extends State<HomeContent> {
         'userId': user.uid,
         'moodEmoji': mood.emoji,
         'moodLabel': mood.label,
-        'timestamp': FieldValue.serverTimestamp(), // Firestore automatically records the server time
-        'dateLogged': todayString, // Fixed format for easier querying
+        'timestamp': FieldValue.serverTimestamp(),
+        'dateLogged': todayString,
       };
 
       if (querySnapshot.docs.isNotEmpty) {
-        // 2. If entry exists, update it
         await querySnapshot.docs.first.reference.update(moodData);
       } else {
-        // 3. If entry doesn't exist, create it
         await moodLogRef.add(moodData);
       }
 
@@ -233,14 +207,11 @@ class _HomeContentState extends State<HomeContent> {
   }
 
 
-  // --- UPDATED MOOD SELECTION LOGIC ---
   void _selectMood(MoodItem mood) {
     setState(() {
-      final isNewSelection = _selectedMood != mood;
-      _selectedMood = isNewSelection ? mood : null;
-
+      _selectedMood = _selectedMood == mood ? null : mood;
       if (_selectedMood != null) {
-        _saveMoodToFirebase(_selectedMood!); // Save on successful selection
+        _saveMoodToFirebase(_selectedMood!);
       }
     });
   }
@@ -249,15 +220,6 @@ class _HomeContentState extends State<HomeContent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Logic for weather-based suggestions
-    String weatherSuggestion = 'Stay mindful and centered today.';
-    bool showWeatherSuggestion = false;
-
-    if (_weatherData != null && _weatherData!.currentTemp > 30) {
-      weatherSuggestion = "The temperature is high. Remember to prioritize hydration and stay cool.";
-      showWeatherSuggestion = true;
-    }
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -297,19 +259,19 @@ class _HomeContentState extends State<HomeContent> {
               selectedMood: _selectedMood,
               onMoodSelected: _selectMood,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
 
 
-            _isLoadingWeather
-                ? const Center(child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(),
-            ))
-                : _UnifiedWeatherCard(data: _weatherData),
-            const SizedBox(height: 20),
-
-            if (showWeatherSuggestion)
-              _SuggestionCard(text: weatherSuggestion, icon: Icons.waves_outlined),
+            Padding(
+              padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
+              child: Text(
+                'Activities',
+                style: theme.textTheme.titleLarge!.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            _DailyProgressStrip(
+              activities: _dailyActivities,
+            ),
             const SizedBox(height: 20),
           ],
         ),
@@ -399,32 +361,25 @@ class _MoodLogCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- FIX 1: Font Scaling Fix ---
             Text(
               selectedMood == null
                   ? 'How do you feel about your current emotions?'
                   : 'Mood Logged: ${selectedMood!.label}',
-              style: theme.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold), // Reduced font size
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
-
-            // --- FIX 2 & 3: Layout and Clipping Fix ---
-            // Using a simple Row, and wrapping all items inside it.
-            // Reduced emoji size from 40 to 30.
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: MoodItem.allMoods.map((mood) {
                 final isSelected = mood == selectedMood;
-                return Expanded( // Ensures emojis divide the space equally
+                return Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2.0),
                     child: InkWell(
                       onTap: () => onMoodSelected(mood),
                       borderRadius: BorderRadius.circular(30),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0), // Reduced vertical padding
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
@@ -437,7 +392,7 @@ class _MoodLogCard extends StatelessWidget {
                         ),
                         child: Text(
                           mood.emoji,
-                          style: const TextStyle(fontSize: 32), // Reduced emoji size
+                          style: const TextStyle(fontSize: 32),
                         ),
                       ),
                     ),
@@ -445,7 +400,6 @@ class _MoodLogCard extends StatelessWidget {
                 );
               }).toList(),
             ),
-            // End of clipping fix
           ],
         ),
       ),
@@ -453,122 +407,80 @@ class _MoodLogCard extends StatelessWidget {
   }
 }
 
-class _UnifiedWeatherCard extends StatelessWidget {
-  final TodayWeather? data;
-  const _UnifiedWeatherCard({this.data});
+class _DailyProgressStrip extends StatelessWidget {
+  final List<Activity> activities;
+
+  const _DailyProgressStrip({required this.activities});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isWarning = data != null && data!.warning.isNotEmpty;
 
-    final backgroundColor = isWarning ? Colors.red.shade900 : Colors.blue.shade600;
+    return SizedBox(
+      height: 120,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: activities.length,
+        itemBuilder: (context, index) {
+          final activity = activities[index];
 
-    final location = data?.location ?? 'Kuala Lumpur';
-    final temp = data?.currentTemp.toString() ?? '--';
-    final condition = data?.condition ?? 'Partly Cloudy';
-    final warning = data?.warning ?? '';
+          return Padding(
+            padding: EdgeInsets.only(right: index == activities.length - 1 ? 0 : 16.0),
+            child: InkWell(
+              onTap: () {
+                Widget? sessionScreen;
+                if (activity.title == 'Yoga') {
+                  sessionScreen = const YogaSelection();
+                } else if (activity.title == 'Breathing') {
+                  sessionScreen = BreathingSession(activity: activity);
+                }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.5),
-              spreadRadius: 2,
-              blurRadius: 10,
-            )
-          ]
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(location, style: theme.textTheme.titleMedium!.copyWith(color: Colors.white70)),
-                  const SizedBox(height: 4),
-                  Text('$temp°', style: theme.textTheme.displayLarge!.copyWith(color: Colors.white, fontWeight: FontWeight.w300, height: 1.0)),
-                  const SizedBox(height: 4),
-                  Text(condition, style: theme.textTheme.titleMedium!.copyWith(color: Colors.white)),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Icon(data?.icon ?? Icons.wb_sunny, color: Colors.yellowAccent, size: 28),
-                  if (isWarning)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(warning, style: theme.textTheme.bodyMedium!.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                ],
-              )
-            ],
-          ),
-
-          const SizedBox(height: 16),
-          const Divider(color: Colors.white38),
-          const SizedBox(height: 8),
-
-          SizedBox(
-            height: 80,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: data?.forecastStrip.length ?? 0,
-              itemBuilder: (context, index) {
-                final item = data!.forecastStrip[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 20.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      Text(item.time, style: theme.textTheme.bodyMedium!.copyWith(color: Colors.white70)),
-                      Icon(item.icon, size: 24, color: Colors.white),
-                      Text('${item.temp}°', style: theme.textTheme.bodyLarge!.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                );
+                if (sessionScreen != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => sessionScreen!),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${activity.title} session is coming soon!')),
+                  );
+                }
               },
+              child: Container(
+                width: 100,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Icon(
+                      activity.icon,
+                      size: 32,
+                      color: activity.color,
+                    ),
+                    Text(
+                      activity.title,
+                      style: theme.textTheme.bodyMedium!.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      '${activity.totalTimeMinutes} min',
+                      style: theme.textTheme.bodySmall!.copyWith(
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SuggestionCard extends StatelessWidget {
-  final String text;
-  final IconData icon;
-  const _SuggestionCard({required this.text, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: theme.primaryColor, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodyLarge!.copyWith(height: 1.5),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

@@ -74,7 +74,8 @@ class MyApp extends StatelessWidget {
       ),
 
       // --- CHANGE: Home is now the AuthGate ---
-      home: const AuthGate(),
+      //home: const AuthGate(),
+      home: const HomeScreen(),
 
       routes: {
         '/login': (context) => const LoginScreen(),
