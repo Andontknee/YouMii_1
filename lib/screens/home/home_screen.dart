@@ -15,6 +15,7 @@ import '/models/activity_model.dart';
 
 import '../sessions/breathing_session.dart';
 import '../sessions/yoga_selection.dart';
+import '../sessions/meditation_selection.dart';
 
 
 
@@ -409,13 +410,11 @@ class _MoodLogCard extends StatelessWidget {
 
 class _DailyProgressStrip extends StatelessWidget {
   final List<Activity> activities;
-
   const _DailyProgressStrip({required this.activities});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return SizedBox(
       height: 120,
       child: ListView.builder(
@@ -423,58 +422,38 @@ class _DailyProgressStrip extends StatelessWidget {
         itemCount: activities.length,
         itemBuilder: (context, index) {
           final activity = activities[index];
-
           return Padding(
             padding: EdgeInsets.only(right: index == activities.length - 1 ? 0 : 16.0),
             child: InkWell(
               onTap: () {
                 Widget? sessionScreen;
+
+                // --- ROUTING LOGIC ---
                 if (activity.title == 'Yoga') {
                   sessionScreen = const YogaSelection();
                 } else if (activity.title == 'Breathing') {
                   sessionScreen = BreathingSession(activity: activity);
+                } else if (activity.title == 'Meditation') {
+                  sessionScreen = const MeditationSelectionScreen();
                 }
+                // --- END ROUTING LOGIC ---
 
                 if (sessionScreen != null) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => sessionScreen!),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => sessionScreen!));
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${activity.title} session is coming soon!')),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${activity.title} session is coming soon!')));
                 }
               },
               child: Container(
                 width: 100,
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(15),
-                ),
+                decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(15)),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    Icon(
-                      activity.icon,
-                      size: 32,
-                      color: activity.color,
-                    ),
-                    Text(
-                      activity.title,
-                      style: theme.textTheme.bodyMedium!.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    Text(
-                      '${activity.totalTimeMinutes} min',
-                      style: theme.textTheme.bodySmall!.copyWith(
-                        color: Colors.grey[500],
-                      ),
-                    ),
+                    Icon(activity.icon, size: 32, color: activity.color),
+                    Text(activity.title, style: theme.textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
+                    Text('${activity.totalTimeMinutes} min', style: theme.textTheme.bodySmall!.copyWith(color: Colors.grey[500])),
                   ],
                 ),
               ),
