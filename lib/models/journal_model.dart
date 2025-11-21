@@ -1,42 +1,40 @@
 // lib/models/journal_model.dart
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // FIX: Corrected import path
 
 class JournalNotebook {
   final String id;
   final String title;
-  final String description;
   final IconData icon;
-  final int entryCount;
-  final Color color;
-  final bool isDeleted;      // --- NEW FIELD ---
-  final Timestamp? deletedAt; // --- NEW FIELD ---
+  final Timestamp createdAt;
+  final bool isDeleted;
+  final Timestamp? deletedAt;
+  final Color color; // FIX: Added color field
+  final int entryCount; // FIX: Added entryCount field
 
-  const JournalNotebook({
+  JournalNotebook({
     required this.id,
     required this.title,
-    required this.description,
     required this.icon,
-    required this.entryCount,
-    required this.color,
-    this.isDeleted = false, // Default to not deleted
+    required this.createdAt,
+    this.isDeleted = false,
     this.deletedAt,
+    required this.color, // FIX: Added to constructor
+    required this.entryCount, // FIX: Added to constructor
   });
 
-  // Add a factory constructor for Firestore
   factory JournalNotebook.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    Map data = doc.data() as Map<String, dynamic>;
     return JournalNotebook(
       id: doc.id,
-      title: data['title'] ?? 'Untitled Notebook',
-      description: data['description'] ?? '',
-      // For simplicity, we'll keep icons local for now
-      icon: Icons.book,
-      entryCount: data['entryCount'] ?? 0,
-      color: Colors.grey, // And color
+      title: data['title'] ?? 'Untitled',
+      icon: Icons.book_outlined,
+      createdAt: data['createdAt'] ?? Timestamp.now(),
       isDeleted: data['isDeleted'] ?? false,
-      deletedAt: data['deletedAt'] as Timestamp?,
+      deletedAt: data['deletedAt'],
+      color: Colors.grey, // FIX: Placeholder color
+      entryCount: 0, // FIX: Placeholder count
     );
   }
 }
@@ -46,38 +44,44 @@ class JournalEntry {
   final String notebookId;
   final String title;
   final String content;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final String? mood;
-  final bool isDeleted;      // --- NEW FIELD ---
-  final Timestamp? deletedAt; // --- NEW FIELD ---
+  final String? mood; // ADDED: Mood field
+  final Timestamp createdAt;
+  final bool isDeleted;
+  final Timestamp? deletedAt;
 
   JournalEntry({
     required this.id,
     required this.notebookId,
     required this.title,
     required this.content,
+    this.mood, // ADDED: Mood field
     required this.createdAt,
-    required this.updatedAt,
-    this.mood,
     this.isDeleted = false,
     this.deletedAt,
   });
 
-  // (The rest of the JournalEntry class remains the same)
-  factory JournalEntry.createNew({
-    required String notebookId,
-    required String title,
-    required String content,
-  }) {
-    final now = DateTime.now();
+  // Helper method for creating new, un-saved entries (non-Firestore)
+  factory JournalEntry.createNew({required String notebookId, required String title, required String content}) {
     return JournalEntry(
-      id: 'entry_${now.millisecondsSinceEpoch}',
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       notebookId: notebookId,
       title: title,
       content: content,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: Timestamp.now(),
+    );
+  }
+
+  factory JournalEntry.fromFirestore(DocumentSnapshot doc) {
+    Map data = doc.data() as Map<String, dynamic>;
+    return JournalEntry(
+      id: doc.id,
+      notebookId: data['notebookId'] ?? '',
+      title: data['title'] ?? 'Untitled Entry',
+      content: data['content'] ?? '',
+      mood: data['mood'],
+      createdAt: data['createdAt'] ?? Timestamp.now(),
+      isDeleted: data['isDeleted'] ?? false,
+      deletedAt: data['deletedAt'],
     );
   }
 }

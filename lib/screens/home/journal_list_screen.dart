@@ -2,75 +2,108 @@
 
 import 'package:flutter/material.dart';
 import 'journal_entry_screen.dart';
+import '../../models/journal_model.dart';
+import '../../services/journal_service.dart';
 
-// --- ADD A PARAMETER TO THE CONSTRUCTOR ---
-class JournalListScreen extends StatelessWidget {
-  final String notebookTitle;
-  const JournalListScreen({super.key, required this.notebookTitle});
+class JournalListScreen extends StatefulWidget {
+  final JournalNotebook notebook;
+  const JournalListScreen({super.key, required this.notebook});
+
+  @override
+  State<JournalListScreen> createState() => _JournalListScreenState();
+}
+
+class _JournalListScreenState extends State<JournalListScreen> {
+  final JournalService _journalService = JournalService();
+  late List<JournalEntry> _entries;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEntries();
+  }
+
+  void _loadEntries() {
+    setState(() {
+      _entries = _journalService.getEntriesForNotebook(widget.notebook.id);
+    });
+  }
+
+  void _addNewEntry() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => JournalEntryScreen(
+          onSave: (title, content) {
+            final newEntry = JournalEntry.createNew(
+              notebookId: widget.notebook.id,
+              title: title,
+              content: content,
+            );
+            _journalService.addEntryToNotebook(widget.notebook.id, newEntry);
+            _loadEntries(); // Refresh the list
+          },
+        ),
+      ),
+    );
+  }
+
+  void _editEntry(JournalEntry entry) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => JournalEntryScreen(
+          entry: entry,
+          onSave: (title, content) {
+            // FIX: Use the correct update method
+            _journalService.updateEntry(widget.notebook.id, entry.id, title, content);
+            _loadEntries(); // Refresh the list
+          },
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    if (now.year == date.year && now.month == date.month && now.day == date.day) return 'Today';
+    return '${date.day}/${date.month}/${date.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, String>> journalEntries = [
-      {'title': 'A Great Day', 'date': 'October 28, 2025', 'description': 'Felt really positive and productive today...'},
-      {'title': 'Morning Gratitude', 'date': 'October 27, 2025', 'description': 'Listed three things I am grateful for...'},
-    ];
-
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        // --- USE THE NOTEBOOK TITLE IN THE APP BAR ---
-        title: Text(notebookTitle, style: const TextStyle(color: Colors.black)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black), // Ensures back arrow is black
-        actions: [
-          IconButton(
-            icon: Icon(Icons.calendar_month_outlined, color: Colors.grey[600]),
-            onPressed: () {
-              // TODO: Implement the simple calendar filter view
-            },
-            tooltip: 'View by Date',
-          ),
-        ],
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
-        itemCount: journalEntries.length,
+      appBar: AppBar(title: Text(widget.notebook.title)),
+      body: _entries.isEmpty
+          ? const Center(child: Text('No entries yet.'))
+          : ListView.builder(
+        itemCount: _entries.length,
         itemBuilder: (context, index) {
-          final entry = journalEntries[index];
-          return Card(
-            elevation: 2.0,
-            margin: const EdgeInsets.only(bottom: 16.0),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          final entry = _entries[index];
+          return Dismissible(
+            key: Key(entry.id),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              color: Colors.red,
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            onDismissed: (direction) {
+              _journalService.deleteEntry(widget.notebook.id, entry.id);
+              _loadEntries(); // Refresh the list
+            },
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-              title: Text(
-                entry['title']!,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text('${entry['date']}\n${entry['description']}'),
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const JournalEntryScreen(isNewEntry: false)),
-                );
-              },
+              title: Text(entry.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(entry.content, maxLines: 2, overflow: TextOverflow.ellipsis),
+              trailing: Text(_formatDate(entry.createdAt.toDate())),
+              onTap: () => _editEntry(entry),
             ),
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const JournalEntryScreen(isNewEntry: true)),
-          );
-        },
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        onPressed: _addNewEntry,
         child: const Icon(Icons.add),
       ),
     );

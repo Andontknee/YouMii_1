@@ -1,22 +1,27 @@
-// lib/main.dart (With Authentication Listener)
+// lib/main.dart
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // NEW IMPORT
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:youmii/firebase_options.dart';
 
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/registration_screen.dart';
 import 'screens/home/home_screen.dart';
 
-// Define custom lavender color (remains the same)
+// Define our custom calming lavender color
 const MaterialColor lavender = MaterialColor(
   0xFF8A64E5,
   <int, Color>{
-    50: Color(0xFFF0EBFD), 100: Color(0xFFDCD2F9), 200: Color(0xFFC7B8F6),
-    300: Color(0xFFB19EF3), 400: Color(0xFF9E89F0), 500: Color(0xFF8A64E5),
-    600: Color(0xFF7E5BD0), 700: Color(0xFF7052BC), 800: Color(0xFF6248A8),
+    50: Color(0xFFF0EBFD),
+    100: Color(0xFFDCD2F9),
+    200: Color(0xFFC7B8F6),
+    300: Color(0xFFB19EF3),
+    400: Color(0xFF9E89F0),
+    500: Color(0xFF8A64E5),
+    600: Color(0xFF7E5BD0),
+    700: Color(0xFF7052BC),
+    800: Color(0xFF6248A8),
     900: Color(0xFF4B3482),
   },
 );
@@ -27,8 +32,6 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  // Note: We remove GoogleSignIn().initialize() if it causes errors
 
   runApp(const MyApp());
 }
@@ -70,12 +73,15 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
+
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
 
-      // --- CHANGE: Home is now the AuthGate ---
-      //home: const AuthGate(),
+      // --- THIS IS THE CRITICAL CHANGE FOR TESTING ---
+      // The app will now start directly on the home screen.
       home: const HomeScreen(),
+      // home: const AuthGate(), // We keep this line commented out during testing.
+      // --- END OF CHANGE ---
 
       routes: {
         '/login': (context) => const LoginScreen(),
@@ -86,31 +92,25 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// --- NEW WIDGET: Authentication Gatekeeper ---
+// The AuthGate is still here, ready for when you want to re-enable it.
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      // Listen to the Firebase Auth state: is there a logged-in user (User?) or not (null)?
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Show loading screen while connecting
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // If the user is logged in (User != null)
         if (snapshot.hasData) {
-          // The Home screen will display for them.
           return const HomeScreen();
         }
 
-        // Otherwise (User == null)
-        // The Login screen will display, protecting the app.
         return const LoginScreen();
       },
     );
