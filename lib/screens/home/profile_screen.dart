@@ -1,6 +1,7 @@
 // lib/screens/home/profile_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import to show real user data if needed
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -8,15 +9,19 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final user = FirebaseAuth.instance.currentUser;
 
-    // --- USING THEME VARIABLES ---
+    // Use real user data if available, otherwise fallback
+    final String displayName = user?.displayName ?? 'Anthony LCM';
+    final String email = user?.email ?? 'anthony.lcm@email.com';
+    final String photoUrl = user?.photoURL ?? 'https://i.pravatar.cc/150?img=3';
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('Profile', style: theme.appBarTheme.titleTextStyle),
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        elevation: theme.appBarTheme.elevation,
-        iconTheme: theme.iconTheme,
+        title: const Text('Profile'), // Theme handles the color now
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
@@ -27,10 +32,10 @@ class ProfileScreen extends StatelessWidget {
           Center(
             child: Stack(
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 60,
-                  // Placeholder image
-                  backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=3'),
+                  backgroundImage: NetworkImage(photoUrl),
+                  backgroundColor: theme.primaryColor.withOpacity(0.2),
                 ),
                 Positioned(
                   bottom: 0,
@@ -39,12 +44,14 @@ class ProfileScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: theme.primaryColor,
                       shape: BoxShape.circle,
-                      border: Border.all(width: 2, color: theme.scaffoldBackgroundColor),
+                      // This border matches the background color to create a "cutout" effect
+                      border: Border.all(width: 3, color: theme.scaffoldBackgroundColor),
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.edit, color: Colors.white, size: 20),
                       onPressed: () {
-                        print('Change profile picture tapped');
+                        // TODO: Implement image picker logic
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit Profile Picture')));
                       },
                     ),
                   ),
@@ -57,56 +64,57 @@ class ProfileScreen extends StatelessWidget {
           // --- User Name and Email ---
           Center(
             child: Text(
-              'Anthony LCM', // Placeholder for user's name
+              displayName,
               style: theme.textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 5),
           Center(
             child: Text(
-              'anthony.lcm@email.com', // Placeholder for user's email
-              style: theme.textTheme.titleMedium!.copyWith(color: Colors.grey[500]),
+              email,
+              style: theme.textTheme.bodyMedium!.copyWith(color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7)),
             ),
           ),
           const SizedBox(height: 40),
 
           // --- Menu List ---
+          // No longer passing specific colors so it uses the Theme defaults
           ProfileMenuItem(
             icon: Icons.settings_outlined,
             title: 'Settings',
-            onTap: () {
-              // TODO: Navigate to Settings Screen
-            },
+            onTap: () {},
           ),
           ProfileMenuItem(
             icon: Icons.notifications_outlined,
             title: 'Notifications',
-            onTap: () {
-              // TODO: Navigate to Notifications Screen
-            },
+            onTap: () {},
           ),
           ProfileMenuItem(
             icon: Icons.history_outlined,
             title: 'History',
-            onTap: () {
-              // TODO: Navigate to History Screen
-            },
+            onTap: () {},
           ),
           ProfileMenuItem(
             icon: Icons.support_agent_outlined,
             title: 'Support and Help',
-            onTap: () {
-              // TODO: Navigate to Support Screen
-            },
+            onTap: () {},
           ),
-          const Divider(height: 40, color: Colors.grey),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16.0),
+            child: Divider(height: 1),
+          ),
+
           ProfileMenuItem(
             icon: Icons.logout_outlined,
             title: 'Logout',
-            textColor: Colors.redAccent, // Make logout text red
-            onTap: () {
-              // TODO: Implement logout functionality
-              Navigator.of(context).pushReplacementNamed('/login');
+            textColor: theme.colorScheme.error, // Use the error color from theme (Red)
+            iconColor: theme.colorScheme.error,
+            onTap: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed('/login');
+              }
             },
           ),
         ],
@@ -115,12 +123,13 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-// A reusable widget for the menu items to keep the code clean.
+// A reusable widget for the menu items
 class ProfileMenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
   final Color? textColor;
+  final Color? iconColor;
 
   const ProfileMenuItem({
     super.key,
@@ -128,26 +137,37 @@ class ProfileMenuItem extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.textColor,
+    this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Card(
-      color: theme.cardColor, // Use cardColor for the menu item background
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      // The card color is now automatically White based on main.dart theme
+      elevation: 0, // Flat style for a cleaner look on the light background
+      margin: const EdgeInsets.symmetric(vertical: 6.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: theme.cardColor,
       child: ListTile(
-        leading: Icon(icon, color: textColor ?? Colors.grey[600]),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (iconColor ?? theme.primaryColor).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: iconColor ?? theme.primaryColor, size: 22),
+        ),
         title: Text(
           title,
           style: theme.textTheme.titleMedium!.copyWith(
-            fontWeight: FontWeight.w500,
-            color: textColor ?? Colors.white, // Ensure text is white
+            fontWeight: FontWeight.w600,
+            color: textColor ?? theme.textTheme.titleMedium?.color, // FIX: Inherits dark text now
           ),
         ),
-        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[600]),
+        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
         onTap: onTap,
       ),
     );
