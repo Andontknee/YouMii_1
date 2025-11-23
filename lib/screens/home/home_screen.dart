@@ -1,27 +1,22 @@
-// lib/screens/home/home_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
-// --- SCREEN IMPORTS (Fixes the errors) ---
+import '../journal/journal_hub_screen.dart';
 import 'dashboard_screen.dart';
+import 'notebooks_screen.dart';
 import 'profile_screen.dart';
 import 'chatbot_screen.dart';
-import '../journal/journal_hub_screen.dart'; // The new Journal Hub
-
-// --- SERVICE & MODEL IMPORTS ---
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '/services/quote_service.dart';
 import '/models/activity_model.dart';
 import '/services/journal_service.dart';
 import '/models/journal_model.dart';
-
-// --- SESSION IMPORTS ---
+import 'journal_entry_screen.dart';
 import '../sessions/breathing_session.dart';
 import '../sessions/yoga_selection.dart';
 import '../sessions/meditation_selection.dart';
 
-// --- MOOD LOG DATA ---
+// --- MOOD LOG DATA STRUCTURE ---
 class MoodItem {
   final String emoji;
   final String label;
@@ -40,20 +35,17 @@ class MoodItem {
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-
-  // --- WIDGET OPTIONS (Now fully imported) ---
   static final List<Widget> _widgetOptions = <Widget>[
     const HomeContent(),
-    const JournalHubScreen(), // Tab 2: The new Journal/Calendar Hub
-    const DashboardScreen(),  // Tab 3: Resource Hub
-    const ProfileScreen(),    // Tab 4: Profile
+    const JournalHubScreen(), // Ensure this class exists in journal_hub_screen.dart
+    const DashboardScreen(),
+    const ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -68,13 +60,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: Center(
-        // Display the widget for the current tab
-        child: _widgetOptions.elementAt(_selectedIndex),
-      ),
+      // --- FIX: Use the getter here ---
+      body: Center(child: _widgetOptions[_selectedIndex]),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-            context, MaterialPageRoute(builder: (context) => const ChatbotScreen())),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatbotScreen())),
         backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
         elevation: 2.0,
@@ -103,23 +92,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNavItem(
-      {required IconData icon, required int index, required String label}) {
+  Widget _buildNavItem({required IconData icon, required int index, required String label}) {
     return IconButton(
-      icon: Icon(icon,
-          color: _selectedIndex == index
-              ? Theme.of(context).primaryColor
-              : Colors.grey[600]),
+      icon: Icon(icon, color: _selectedIndex == index ? Theme.of(context).primaryColor : Colors.grey[600]),
       onPressed: () => _onItemTapped(index),
       tooltip: label,
     );
   }
 }
 
-// --- HOME CONTENT WIDGET ---
 class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
-
   @override
   State<HomeContent> createState() => _HomeContentState();
 }
@@ -129,11 +112,13 @@ class _HomeContentState extends State<HomeContent> {
   bool _isLoadingQuote = true;
   MoodItem? _selectedMood;
   final List<Activity> _dailyActivities = Activity.defaultActivities;
+  final JournalService _journalService = JournalService();
 
   @override
   void initState() {
     super.initState();
     _fetchQuote();
+    _checkTodayMood();
   }
 
   void _fetchQuote() {
@@ -146,20 +131,49 @@ class _HomeContentState extends State<HomeContent> {
     });
   }
 
-  Future<void> _saveMoodToFirebase(MoodItem mood, String? note) async {
+  void _checkTodayMood() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final moodLogRef = FirebaseFirestore.instance.collection('mood_logs');
     final todayString = DateTime.now().toIso8601String().substring(0, 10);
 
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('mood_logs')
+          .where('userId', isEqualTo: user.uid)
+          .where('dateLogged', isEqualTo: todayString)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        final emoji = data['moodEmoji'];
+
+        final moodItem = MoodItem.allMoods.firstWhere((m) => m.emoji == emoji,
+            orElse: () => MoodItem(emoji, 'Mood', Colors.grey));
+
+        if (mounted) {
+          setState(() {
+            _selectedMood = moodItem;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error checking mood: $e");
+    }
+  }
+
+  Future<void> _saveMoodToFirebase(MoodItem mood, String? note) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final moodLogRef = FirebaseFirestore.instance.collection('mood_logs');
+    final todayString = DateTime.now().toIso8601String().substring(0, 10);
     try {
       final querySnapshot = await moodLogRef
           .where('userId', isEqualTo: user.uid)
           .where('dateLogged', isEqualTo: todayString)
           .limit(1)
           .get();
-
       final moodData = {
         'userId': user.uid,
         'moodEmoji': mood.emoji,
@@ -168,13 +182,11 @@ class _HomeContentState extends State<HomeContent> {
         'timestamp': FieldValue.serverTimestamp(),
         'dateLogged': todayString,
       };
-
       if (querySnapshot.docs.isNotEmpty) {
         await querySnapshot.docs.first.reference.update(moodData);
       } else {
         await moodLogRef.add(moodData);
       }
-
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Mood "${mood.label}" logged!')));
@@ -185,7 +197,6 @@ class _HomeContentState extends State<HomeContent> {
 
   void _showMoodNoteDialog(MoodItem mood) {
     final noteController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -234,6 +245,26 @@ class _HomeContentState extends State<HomeContent> {
     );
   }
 
+  void _showJournalPromptDialog(Quote quote) {
+    final titleController = TextEditingController(text: "Daily Inspiration");
+    final contentController = TextEditingController(
+        text:
+        '"${quote.text}"\n- ${quote.author}\n\nMy reflection on this:\n');
+
+    showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              padding: const EdgeInsets.all(20),
+              child: JournalSaveDialog(
+                  quote: quote, journalService: _journalService)),
+        ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -277,7 +308,11 @@ class _HomeContentState extends State<HomeContent> {
                   }
                   final dailyQuote = quoteSnapshot.data ??
                       Quote(text: "Loading...", author: "");
-                  return _DailyQuoteCard(quote: dailyQuote);
+
+                  return _DailyQuoteCard(
+                    quote: dailyQuote,
+                    onJournalTap: () => _showJournalPromptDialog(dailyQuote),
+                  );
                 }),
 
             const SizedBox(height: 20),
@@ -286,6 +321,12 @@ class _HomeContentState extends State<HomeContent> {
             _MoodLogCard(
               selectedMood: _selectedMood,
               onMoodSelected: (mood) => _showMoodNoteDialog(mood),
+              // FIX: Passed the onReset callback
+              onReset: () {
+                setState(() {
+                  _selectedMood = null;
+                });
+              },
             ),
 
             const SizedBox(height: 40),
@@ -308,9 +349,159 @@ class _HomeContentState extends State<HomeContent> {
 
 // --- WIDGETS ---
 
+class JournalSaveDialog extends StatefulWidget {
+  final Quote quote;
+  final JournalService journalService;
+  const JournalSaveDialog(
+      {required this.quote, required this.journalService, super.key});
+
+  @override
+  State<JournalSaveDialog> createState() => _JournalSaveDialogState();
+}
+
+class _JournalSaveDialogState extends State<JournalSaveDialog> {
+  late TextEditingController _titleController;
+  late TextEditingController _contentController;
+  final _newNotebookController = TextEditingController();
+
+  String? _selectedNotebookId;
+  bool _isCreatingNewNotebook = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: "Reflection on a Quote");
+    _contentController = TextEditingController(
+        text:
+        '"${widget.quote.text}"\n- ${widget.quote.author}\n\nMy reflection on this:\n');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return FutureBuilder<List<JournalNotebook>>(
+      future: widget.journalService.getNotebooks(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final notebooks = snapshot.data!;
+        if (notebooks.isNotEmpty && _selectedNotebookId == null) {
+          _selectedNotebookId = notebooks.first.id;
+        }
+
+        void saveEntry() {
+          if (_selectedNotebookId == null) return;
+          final newEntry = JournalEntry.createNew(
+            notebookId: _selectedNotebookId!,
+            title: _titleController.text.trim().isNotEmpty
+                ? _titleController.text.trim()
+                : 'Untitled Entry',
+            content: _contentController.text.trim(),
+          );
+
+          widget.journalService
+              .addEntryToNotebook(_selectedNotebookId!, newEntry);
+          Navigator.pop(context);
+        }
+
+        void createNewNotebook() async {
+          final newTitle = _newNotebookController.text.trim();
+          if (newTitle.isEmpty) return;
+          await widget.journalService.addNotebook(newTitle);
+          setState(() {
+            _isCreatingNewNotebook = false;
+          });
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Save to Journal', style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 24),
+            if (!_isCreatingNewNotebook)
+              DropdownButton<String>(
+                value: _selectedNotebookId,
+                isExpanded: true,
+                hint: const Text('Select a Notebook'),
+                items: [
+                  ...notebooks
+                      .map((n) => DropdownMenuItem(
+                      value: n.id, child: Text(n.title)))
+                      .toList(),
+                  const DropdownMenuItem(
+                      value: 'create_new',
+                      child: Text('+ Create New Notebook...')),
+                ],
+                onChanged: (value) {
+                  if (value == 'create_new') {
+                    setState(() => _isCreatingNewNotebook = true);
+                  } else {
+                    setState(() => _selectedNotebookId = value);
+                  }
+                },
+              ),
+            if (_isCreatingNewNotebook)
+              Row(
+                children: [
+                  Expanded(
+                      child: TextField(
+                          controller: _newNotebookController,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                              labelText: 'New Folder Name'))),
+                  IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () =>
+                          setState(() => _isCreatingNewNotebook = false)),
+                  IconButton(
+                      icon: const Icon(Icons.check),
+                      onPressed: createNewNotebook),
+                ],
+              ),
+            const SizedBox(height: 20),
+            TextField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Title')),
+            const SizedBox(height: 16),
+            Expanded(
+                child: TextField(
+                    controller: _contentController,
+                    decoration: const InputDecoration(labelText: 'Content'),
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top)),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel')),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed:
+                  _selectedNotebookId == null || _isCreatingNewNotebook
+                      ? null
+                      : saveEntry,
+                  child: const Text('Save'),
+                ),
+              ],
+            )
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _DailyQuoteCard extends StatelessWidget {
   final Quote quote;
-  const _DailyQuoteCard({required this.quote});
+  final VoidCallback onJournalTap;
+  const _DailyQuoteCard(
+      {required this.quote, required this.onJournalTap});
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +533,20 @@ class _DailyQuoteCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall!
                       .copyWith(color: Colors.grey[500])),
             ),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.black12),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onJournalTap,
+                icon: Icon(Icons.book_outlined, color: theme.primaryColor),
+                label: Text('Journal this',
+                    style: TextStyle(
+                        color: theme.primaryColor,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ),
           ],
         ),
       ),
@@ -352,12 +557,73 @@ class _DailyQuoteCard extends StatelessWidget {
 class _MoodLogCard extends StatelessWidget {
   final MoodItem? selectedMood;
   final Function(MoodItem) onMoodSelected;
-  const _MoodLogCard(
-      {required this.selectedMood, required this.onMoodSelected});
+  final VoidCallback onReset; // REQUIRED: Reset callback
+
+  const _MoodLogCard({
+    required this.selectedMood,
+    required this.onMoodSelected,
+    required this.onReset,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // --- STATE 1: MOOD LOGGED (SUMMARY VIEW) ---
+    if (selectedMood != null) {
+      return Card(
+        elevation: 2.0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        // FIX: Using your specific requested color
+        color: const Color(0xFFD3D3FF),
+        child: InkWell(
+          // FIX: Tapping triggers reset to allow editing
+          onTap: onReset,
+          borderRadius: BorderRadius.circular(15),
+          child: Padding(
+            padding:
+            const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: selectedMood!.color, width: 2),
+                  ),
+                  child: Text(selectedMood!.emoji,
+                      style: const TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mood Logged',
+                        style: theme.textTheme.bodySmall!
+                            .copyWith(color: Colors.grey[700]),
+                      ),
+                      Text(
+                        selectedMood!.label,
+                        style: theme.textTheme.titleLarge!.copyWith(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.edit, color: theme.primaryColor, size: 22),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // --- STATE 2: INPUT VIEW ---
     return Card(
       elevation: 4.0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -366,17 +632,13 @@ class _MoodLogCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-                selectedMood == null
-                    ? 'How do you feel today?'
-                    : 'Mood Logged: ${selectedMood!.label}',
+            Text('How do you feel today?',
                 style: theme.textTheme.titleMedium!
                     .copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: MoodItem.allMoods.map((mood) {
-                final isSelected = mood == selectedMood;
                 return Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2.0),
@@ -386,16 +648,6 @@ class _MoodLogCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 4.0),
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: isSelected
-                              ? Border.all(
-                              color: theme.primaryColor, width: 3)
-                              : null,
-                          color: isSelected
-                              ? theme.primaryColor.withOpacity(0.1)
-                              : null,
-                        ),
                         child: Text(mood.emoji,
                             style: const TextStyle(fontSize: 32)),
                       ),
@@ -460,7 +712,7 @@ class _DailyProgressStrip extends StatelessWidget {
                     Icon(activity.icon, size: 32, color: activity.color),
                     Text(activity.title,
                         style: theme.textTheme.bodyMedium!.copyWith(
-                            fontWeight: FontWeight.bold, color: Colors.white),
+                            fontWeight: FontWeight.bold, color: Colors.black87),
                         textAlign: TextAlign.center),
                     Text('${activity.totalTimeMinutes} min',
                         style: theme.textTheme.bodySmall!
