@@ -17,11 +17,10 @@ class Activity {
     this.isCompleted = false,
   });
 
-  // Example list of user's habits/suggestions
+  // "Light Walk" has been removed.
   static List<Activity> get defaultActivities => [
     Activity(title: 'Meditation', icon: Icons.self_improvement_outlined, color: Colors.blueGrey, totalTimeMinutes: 10),
     Activity(title: 'Breathing', icon: Icons.bubble_chart_outlined, color: Colors.indigo, totalTimeMinutes: 5),
-    Activity(title: 'Light Walk', icon: Icons.directions_walk_outlined, color: Colors.teal, totalTimeMinutes: 20),
     Activity(title: 'Yoga', icon: Icons.sports_gymnastics_outlined, color: Colors.purple, totalTimeMinutes: 15),
   ];
 }

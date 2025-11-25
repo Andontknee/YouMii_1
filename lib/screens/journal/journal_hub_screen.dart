@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 import '../home/notebooks_screen.dart';
-import '../home/dashboard_screen.dart';
 import '../home/home_screen.dart'; // To access MoodItem class
 
 // --- MOOD SERVICE ---
@@ -53,21 +52,21 @@ class JournalHubScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
-          title: const Text('Journal & Moods'),
+          title: const Text('My Journal'),
           bottom: TabBar(
             indicatorColor: theme.primaryColor,
             labelColor: theme.primaryColor,
             unselectedLabelColor: Colors.grey,
             tabs: const [
-              Tab(text: 'Mood Calendar', icon: Icon(Icons.calendar_month_outlined)),
               Tab(text: 'Notebooks', icon: Icon(Icons.book_outlined)),
+              Tab(text: 'Mood Calendar', icon: Icon(Icons.calendar_month_outlined)),
             ],
           ),
         ),
         body: const TabBarView(
           children: [
-            MoodCalendarTab(),
-            NotebooksScreen(),
+            NotebooksScreen(), // Tab 1: Notebooks
+            MoodCalendarTab(), // Tab 2: Calendar (Moved here)
           ],
         ),
       ),
@@ -138,10 +137,7 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
             const SizedBox(height: 20),
             Row(
               children: [
-                Text(
-                    'Mood for $dateKey',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                ),
+                Text('Mood for $dateKey', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -188,7 +184,6 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
 
     return Column(
       children: [
-        // --- Month Navigation ---
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
@@ -219,8 +214,6 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
             ],
           ),
         ),
-
-        // --- Day Names ---
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 8.0),
           child: Row(
@@ -233,8 +226,6 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
             ],
           ),
         ),
-
-        // --- CALENDAR GRID ---
         _isLoading
             ? const Expanded(child: Center(child: CircularProgressIndicator()))
             : Expanded(
@@ -244,30 +235,21 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
               crossAxisCount: 7,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
-              childAspectRatio: 0.7, // FIX: Taller cells to fit date + emoji
+              childAspectRatio: 0.7,
             ),
             itemCount: totalDays + firstWeekday - 1,
             itemBuilder: (context, index) {
               if (index < firstWeekday - 1) return const SizedBox.shrink();
-
               final day = index - (firstWeekday - 2);
-              final dateKey = DateTime(_focusedDay.year, _focusedDay.month, day)
-                  .toIso8601String()
-                  .substring(0, 10);
-
+              final dateKey = DateTime(_focusedDay.year, _focusedDay.month, day).toIso8601String().substring(0, 10);
               final hasMood = _moodData.containsKey(dateKey);
               final moodInfo = _moodData[dateKey];
-              final moodColor = hasMood
-                  ? _getMoodDetails(moodInfo!['emoji']).color
-                  : Colors.transparent;
+              final moodColor = hasMood ? _getMoodDetails(moodInfo!['emoji']).color : Colors.transparent;
 
               return InkWell(
-                onTap: hasMood
-                    ? () => _showMoodDetails(dateKey, moodInfo!['emoji'], moodInfo['note'])
-                    : null,
+                onTap: hasMood ? () => _showMoodDetails(dateKey, moodInfo!['emoji'], moodInfo['note']) : null,
                 child: Container(
                   decoration: BoxDecoration(
-                    // Use a Rounded Rectangle instead of Circle for taller cells
                     borderRadius: BorderRadius.circular(12),
                     color: hasMood ? moodColor.withOpacity(0.2) : Colors.transparent,
                     border: !hasMood ? Border.all(color: Colors.grey[200]!, width: 1) : Border.all(color: moodColor, width: 1.5),
@@ -275,23 +257,8 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // 1. Date Number (Always visible)
-                      Text(
-                        day.toString(),
-                        style: TextStyle(
-                          color: hasMood ? Colors.black87 : Colors.grey[600],
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      // 2. Emoji (Visible only if logged)
-                      if (hasMood) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                            moodInfo!['emoji'],
-                            style: const TextStyle(fontSize: 24) // Big emoji
-                        ),
-                      ]
+                      Text(day.toString(), style: TextStyle(color: hasMood ? Colors.black87 : Colors.grey[600], fontWeight: hasMood ? FontWeight.bold : FontWeight.normal, fontSize: 14)),
+                      if (hasMood) ...[const SizedBox(height: 4), Text(moodInfo!['emoji'], style: const TextStyle(fontSize: 24))]
                     ],
                   ),
                 ),
