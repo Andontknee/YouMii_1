@@ -2,35 +2,35 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-// import 'package:google_sign_in/google_sign_in.dart'; // Optional based on version
+import 'package:firebase_auth/firebase_auth.dart'; // Needed for AuthGate
 import 'package:youmii/firebase_options.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/registration_screen.dart';
 import 'screens/home/home_screen.dart';
 
-// --- 🎨 VIBRANT LAVENDER & CORAL PALETTE ---
+// --- 🎨 COLOR PALETTE DEFINITION ---
 
-// Primary Brand (Lavender - slightly richer)
-const Color kPrimaryLavender = Color(0xFF7E57C2);
-const Color kDeepLavender = Color(0xFF512DA8);
+// Brand / Primary (Kept Lavender for buttons/icons, but you might want to change this to a dark green later if you keep the Olivine background)
+const Color kPrimaryLavender = Color(0xFFA795C4);
+const Color kDeepLavender = Color(0xFF8A75AE);
 
-// Secondary Brand (Coral/Peach - Adds the "Vibrancy" from your image)
-const Color kAccentCoral = Color(0xFFFF8A65);
-const Color kSoftPeach = Color(0xFFFFCCBC);
+// Backgrounds
+// --- CHANGED: New Olivine Background ---
+const Color kPrimaryBackground = Color(0xFF98B678);
+// ---------------------------------------
+const Color kSecondaryBackground = Color(0xFFE5DBF2);
+const Color kCardColor = Color(0xFFF8F5FC); // Keeping cards white/lilac to pop against the green
 
-// Backgrounds & Surfaces
-const Color kAppBackground = Color(0xFFF4F1FA); // A very subtle lavender tint
-const Color kCardSurface = Color(0xFFFFFFFF);   // Pure white for pop
+// Typography Colors
+const Color kTextHeader = Color(0xFF4A3F59);
+const Color kTextBody = Color(0xFF6B6280);
+const Color kTextMuted = Color(0xFF9B8BB2);
 
-// Typography
-const Color kTextPrimary = Color(0xFF2D2D3A); // Nearly black, softer than pure black
-const Color kTextSecondary = Color(0xFF6E6E80); // Muted grey-purple
-
-// Status
-const Color kSuccess = Color(0xFF81C784);
-const Color kError = Color(0xFFE57373);
+// Accents
+const Color kAccentSuccess = Color(0xFF93C8A2);
+const Color kAccentWarning = Color(0xFFE7CBA3);
+const Color kAccentError = Color(0xFFDFA8A8);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,126 +55,111 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.light,
 
-        // 1. Global Colors
-        scaffoldBackgroundColor: kAppBackground,
+        // 1. Colors
+        scaffoldBackgroundColor: kPrimaryBackground,
         primaryColor: kPrimaryLavender,
-        cardColor: kCardSurface,
-        canvasColor: kAppBackground,
+        cardColor: kCardColor,
+        canvasColor: kPrimaryBackground,
 
-        // Defines the main color set for widgets
         colorScheme: const ColorScheme.light(
           primary: kPrimaryLavender,
+          secondary: kDeepLavender,
+          surface: kCardColor,
+          error: kAccentError,
           onPrimary: Colors.white,
-          secondary: kAccentCoral, // This makes Floating Action Buttons pop!
-          onSecondary: Colors.white,
-          surface: kCardSurface,
-          onSurface: kTextPrimary,
-          error: kError,
+          onSurface: kTextHeader,
         ),
 
-        // 2. Typography (Google Fonts style: Poppins or Nunito recommended)
+        // 2. Typography
         fontFamily: 'Poppins',
         textTheme: const TextTheme(
-          headlineLarge: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700),
-          headlineMedium: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700),
-          headlineSmall: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700),
+          headlineLarge: TextStyle(color: kTextHeader, fontWeight: FontWeight.w600),
+          headlineMedium: TextStyle(color: kTextHeader, fontWeight: FontWeight.w600),
+          headlineSmall: TextStyle(color: kTextHeader, fontWeight: FontWeight.w600),
 
-          titleLarge: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w600),
-          titleMedium: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w600),
-          titleSmall: TextStyle(color: kTextSecondary, fontWeight: FontWeight.w600),
+          titleLarge: TextStyle(color: kTextHeader, fontWeight: FontWeight.w600),
+          titleMedium: TextStyle(color: kTextBody, fontWeight: FontWeight.w500),
+          titleSmall: TextStyle(color: kTextBody, fontWeight: FontWeight.w500),
 
-          bodyLarge: TextStyle(color: kTextPrimary, fontSize: 16),
-          bodyMedium: TextStyle(color: kTextSecondary, fontSize: 14),
-          bodySmall: TextStyle(color: kTextSecondary, fontSize: 12),
+          bodyLarge: TextStyle(color: kTextBody, fontSize: 16),
+          bodyMedium: TextStyle(color: kTextBody, fontSize: 14),
+          bodySmall: TextStyle(color: kTextMuted, fontSize: 12),
         ),
 
-        // 3. Component Themes (The "Vibrant" Look)
+        // 3. Component Themes
 
-        // AppBar: Clean and transparent
+        // AppBar
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
-          iconTheme: IconThemeData(color: kTextPrimary),
-          titleTextStyle: TextStyle(color: kTextPrimary, fontSize: 22, fontWeight: FontWeight.w700),
+          iconTheme: IconThemeData(color: kTextHeader),
+          titleTextStyle: TextStyle(color: kTextHeader, fontSize: 20, fontWeight: FontWeight.w600),
         ),
 
-        // Cards: High pop, rounded corners, soft shadow
+        // Cards
         cardTheme: CardThemeData(
-          color: kCardSurface,
-          elevation: 0, // Flat style with border OR low elevation
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24), // Very rounded like the image
-            side: BorderSide.none, // Cleaner look
-          ),
+          color: kCardColor,
+          elevation: 4,
+          shadowColor: const Color.fromRGBO(138, 117, 174, 0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           margin: const EdgeInsets.only(bottom: 16),
-          // Adding a subtle shadow manually in widgets often looks better,
-          // but global elevation 2 is good for standard material.
         ),
 
-        // Input Fields: Friendly and rounded
+        // Input Fields
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide.none, // Clean, no border look
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFD7CFEA), width: 1.5),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: const BorderSide(color: Colors.transparent),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFD7CFEA), width: 1.5),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: const BorderSide(color: kPrimaryLavender, width: 2),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: kPrimaryLavender, width: 1.5),
           ),
-          hintStyle: const TextStyle(color: Color(0xFFB0B0C0)),
-          labelStyle: const TextStyle(color: kTextSecondary),
+          hintStyle: const TextStyle(color: Color(0xFFB9A9D6)),
+          labelStyle: const TextStyle(color: kTextMuted),
         ),
 
-        // Buttons: Vibrant and Pill-shaped
+        // Buttons
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: kPrimaryLavender,
             foregroundColor: Colors.white,
-            elevation: 4,
-            shadowColor: kPrimaryLavender.withOpacity(0.4), // Colored shadow!
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)), // Pill shape
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            elevation: 2,
+            shadowColor: const Color.fromRGBO(123, 97, 158, 0.15),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
         ),
 
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: kPrimaryLavender,
-            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+            textStyle: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
 
-        // Floating Action Button (The "Pop")
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          backgroundColor: kAccentCoral, // Orange/Peach button
-          foregroundColor: Colors.white,
-          elevation: 6,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        ),
-
-        // Bottom Navigation Bar: Clean white
+        // Bottom Navigation Bar
         bottomAppBarTheme: const BottomAppBarThemeData(
-          color: kCardSurface,
-          elevation: 20,
-          shadowColor: Colors.black12,
-          surfaceTintColor: Colors.white,
+          color: kCardColor,
+          elevation: 10,
+          shadowColor: Color.fromRGBO(138, 117, 174, 0.1),
         ),
 
         // Icons
         iconTheme: const IconThemeData(color: kPrimaryLavender),
       ),
 
-       home: const AuthGate(),
-     // home: const HomeScreen(),//
+      // Auth Gatekeeper
+      home: const AuthGate(),
 
       routes: {
         '/login': (context) => const LoginScreen(),
@@ -193,19 +178,14 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // 1. While checking (loading state)
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
-
-        // 2. If User is logged in -> Go to Home
         if (snapshot.hasData) {
           return const HomeScreen();
         }
-
-        // 3. If User is NOT logged in -> Go to Login
         return const LoginScreen();
       },
     );

@@ -58,15 +58,17 @@ class JournalHubScreen extends StatelessWidget {
             labelColor: theme.primaryColor,
             unselectedLabelColor: Colors.grey,
             tabs: const [
-              Tab(text: 'Notebooks', icon: Icon(Icons.book_outlined)),
+              // --- SWAPPED: Mood Calendar is now FIRST ---
               Tab(text: 'Mood Calendar', icon: Icon(Icons.calendar_month_outlined)),
+              Tab(text: 'Notebooks', icon: Icon(Icons.book_outlined)),
             ],
           ),
         ),
         body: const TabBarView(
           children: [
-            NotebooksScreen(), // Tab 1: Notebooks
-            MoodCalendarTab(), // Tab 2: Calendar (Moved here)
+            // --- SWAPPED: MoodCalendarTab is now FIRST ---
+            MoodCalendarTab(),
+            NotebooksScreen(),
           ],
         ),
       ),
