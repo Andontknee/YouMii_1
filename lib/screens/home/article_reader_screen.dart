@@ -1,9 +1,9 @@
-// lib/screens/home/article_reader_screen.dart (Final Content & Link Styling)
+// lib/screens/home/article_reader_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart'; // NEW IMPORT for opening external links
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/content_hub/article.dart';
 
 class ArticleReaderScreen extends StatefulWidget {
@@ -56,12 +56,11 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
     });
   }
 
-  // New function to handle tapping Markdown links
   void _onTapLink(String text, String? href, String title) async {
     if (href != null) {
       final url = Uri.parse(href);
       if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication); // Opens in external browser
+        await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open link.')));
       }
@@ -98,30 +97,42 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
 
           // 2. Source Name
           Text("Source: ${widget.article.sourceName}", style: theme.textTheme.bodySmall!.copyWith(fontStyle: FontStyle.italic, color: Colors.grey)),
-          const Divider(color: Colors.white12),
+          const Divider(color: Colors.grey), // Changed from white12 to grey for visibility
 
           // 3. Main Markdown Content
           MarkdownBody(
             data: _markdownContent,
             selectable: true,
-            onTapLink: _onTapLink, // <-- NEW LINK HANDLER
+            onTapLink: _onTapLink,
             styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-              // Style adjustments for links and paragraphs
-              p: theme.textTheme.bodyLarge!.copyWith(height: 1.5, color: Colors.white),
+              // --- FIX: UPDATED COLORS FOR LIGHT THEME ---
+
+              // Paragraphs: Use the theme's body text color (Dark Grey/Purple)
+              p: theme.textTheme.bodyLarge!.copyWith(height: 1.6),
+
+              // Headings: Use primary color or dark text
+              h1: theme.textTheme.headlineSmall!.copyWith(color: theme.primaryColor, fontWeight: FontWeight.bold),
+              h2: theme.textTheme.titleLarge!.copyWith(color: Colors.black87, fontWeight: FontWeight.bold),
+              h3: theme.textTheme.titleMedium!.copyWith(color: Colors.black54, fontWeight: FontWeight.bold),
+
+              // Links: Keep primary color
               a: TextStyle(color: theme.primaryColor, decoration: TextDecoration.underline, fontWeight: FontWeight.bold),
 
-              // Ensure other elements remain styled correctly
-              h1: theme.textTheme.headlineSmall!.copyWith(color: theme.primaryColor, fontWeight: FontWeight.bold),
-              h2: theme.textTheme.titleLarge!.copyWith(color: Colors.white70, fontWeight: FontWeight.bold),
-              blockquote: theme.textTheme.titleMedium!.copyWith(fontStyle: FontStyle.italic, color: Colors.grey[500]),
-              listBullet: TextStyle(color: Colors.white, fontSize: theme.textTheme.bodyLarge!.fontSize),
+              // Quotes: Grey italic
+              blockquote: theme.textTheme.titleMedium!.copyWith(fontStyle: FontStyle.italic, color: Colors.grey[600]),
+
+              // Lists: Use dark bullets
+              listBullet: TextStyle(color: Colors.black87, fontSize: theme.textTheme.bodyLarge!.fontSize),
+
+              // Bold text
+              strong: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
             ),
           ),
           const SizedBox(height: 40),
           Center(
             child: Text(
               'End of Article. Reflection is the start of change.',
-              style: theme.textTheme.labelLarge!.copyWith(color: Colors.grey[600]),
+              style: theme.textTheme.labelLarge!.copyWith(color: Colors.grey[500]),
             ),
           ),
         ],
