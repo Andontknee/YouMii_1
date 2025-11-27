@@ -12,10 +12,14 @@ import '/services/quote_service.dart';
 import '/models/activity_model.dart';
 import '/services/journal_service.dart';
 import '/models/journal_model.dart';
+import '/models/wellness_tasks_data.dart';
 import 'journal_entry_screen.dart';
+
+// --- RESTORED SESSION IMPORTS ---
 import '../sessions/breathing_session.dart';
 import '../sessions/yoga_selection.dart';
 import '../sessions/meditation_selection.dart';
+// -------------------------------
 
 class MoodItem {
   final String emoji;
@@ -41,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   static final List<Widget> _widgetOptions = <Widget>[
     const HomeContent(),
-    const JournalHubScreen(), // Ensure this import is correct
+    const JournalHubScreen(),
     const DashboardScreen(),
     const ProfileScreen(),
   ];
@@ -56,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(context,
             MaterialPageRoute(builder: (context) => const ChatbotScreen())),
-        backgroundColor: theme.primaryColor, // Lavender FAB
+        backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
         elevation: 4.0,
         shape: const CircleBorder(),
@@ -65,9 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0,
-        color: theme.cardColor,
-        elevation: 10.0,
+        notchMargin: 10.0,
         child: SizedBox(
           height: 60,
           child: Row(
@@ -110,15 +112,15 @@ class _HomeContentState extends State<HomeContent> {
   final List<Activity> _dailyActivities = Activity.defaultActivities;
   final JournalService _journalService = JournalService();
 
-  // Mock Tasks for Daily Plan (You can use the AI service here)
-  final List<String> _aiTasks = ["Drink Water", "5min Breath", "Stretch"];
-  final bool _isLoadingTasks = false;
+  List<String> _aiTasks = [];
+  bool _isLoadingTasks = true;
 
   @override
   void initState() {
     super.initState();
     _fetchQuote();
     _checkTodayMood();
+    _fetchDailyTasks();
   }
 
   void _fetchQuote() {
@@ -129,6 +131,16 @@ class _HomeContentState extends State<HomeContent> {
         if (mounted) setState(() => _isLoadingQuote = false);
       });
     });
+  }
+
+  Future<void> _fetchDailyTasks() async {
+    final randomTasks = WellnessTasksData.getRandomTasks(count: 3);
+    if (mounted) {
+      setState(() {
+        _aiTasks = randomTasks;
+        _isLoadingTasks = false;
+      });
+    }
   }
 
   void _checkTodayMood() async {
@@ -177,11 +189,6 @@ class _HomeContentState extends State<HomeContent> {
     );
   }
 
-  void _showJournalPromptDialog(Quote quote) {
-    // ... (Existing Dialog Logic, keeping brief for space) ...
-    // Ideally, use the JournalSaveDialog widget from previous steps
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -192,21 +199,21 @@ class _HomeContentState extends State<HomeContent> {
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0), // Wider margins
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
           children: [
             // --- HEADER ---
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('YouMii', style: theme.textTheme.headlineSmall!.copyWith(color: theme.primaryColor)),
               CircleAvatar(
-                backgroundColor: theme.primaryColor.withOpacity(0.1),
-                child: IconButton(icon: Icon(Icons.history_rounded, color: theme.primaryColor), onPressed: () {}),
+                backgroundColor: Colors.white,
+                child: IconButton(icon: Icon(Icons.person, color: theme.primaryColor), onPressed: () {}),
               ),
             ]),
             const SizedBox(height: 24),
             Text('Hello, $displayName', style: theme.textTheme.headlineLarge),
             const SizedBox(height: 24),
 
-            // --- 1. DAILY QUOTE (COTTON CANDY: Lavender/Blue) ---
+            // --- 1. DAILY QUOTE ---
             FutureBuilder<Quote>(
                 future: _dailyQuoteFuture,
                 builder: (context, quoteSnapshot) {
@@ -217,7 +224,7 @@ class _HomeContentState extends State<HomeContent> {
 
             const SizedBox(height: 20),
 
-            // --- 2. MOOD LOG (COTTON CANDY: Pink/Purple) ---
+            // --- 2. MOOD LOG ---
             _MoodLogCard(
                 selectedMood: _selectedMood,
                 onMoodSelected: (mood) => _showMoodNoteDialog(mood),
@@ -226,17 +233,15 @@ class _HomeContentState extends State<HomeContent> {
 
             const SizedBox(height: 30),
 
-            // --- 3. ACTIVITIES & PLANS (MINTY FRESH: Green/Mint) ---
-            // We group these visually to show they are "Action" items
-
+            // --- 3. ACTIVITIES & PLANS ---
             Padding(padding: const EdgeInsets.only(left: 4.0, bottom: 12.0), child: Text('Wellness Tools', style: theme.textTheme.titleLarge)),
 
-            // Pass the Mint Green color to the strip
-            _DailyProgressStrip(activities: _dailyActivities, accentColor: theme.colorScheme.secondary),
+            // Pass the color and ensure navigation is active
+            _DailyProgressStrip(activities: _dailyActivities, cardColor: const Color(0xFFE0F2F1)),
 
             const SizedBox(height: 20),
 
-            _DailyTasksCard(tasks: _aiTasks, isLoading: _isLoadingTasks, accentColor: theme.colorScheme.secondary),
+            _DailyTasksCard(tasks: _aiTasks, isLoading: _isLoadingTasks, cardColor: const Color(0xFFFFF8E1)),
 
             const SizedBox(height: 20),
           ],
@@ -246,7 +251,7 @@ class _HomeContentState extends State<HomeContent> {
   }
 }
 
-// --- UPDATED WIDGETS WITH COLOR CODING ---
+// --- WIDGETS ---
 
 class _DailyQuoteCard extends StatelessWidget {
   final Quote quote;
@@ -256,13 +261,8 @@ class _DailyQuoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      // Default White Card from Theme
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          // Subtle gradient or solid color for "Cotton Candy" feel?
-          // Let's stick to white surface with colored text for cleanliness.
-        ),
+      color: const Color(0xFFE3F2FD), // Pastel Blue
+      child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,13 +291,11 @@ class _MoodLogCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Uses the Tertiary color (Pink) for Moods if available, else Primary
     final moodColor = theme.colorScheme.tertiary;
 
     if (selectedMood != null) {
       return Card(
-        color: moodColor.withOpacity(0.15), // Soft Pink background for logged state
+        color: moodColor.withOpacity(0.15),
         child: InkWell(
           onTap: onReset, borderRadius: BorderRadius.circular(24),
           child: Padding(
@@ -332,8 +330,8 @@ class _MoodLogCard extends StatelessWidget {
 
 class _DailyProgressStrip extends StatelessWidget {
   final List<Activity> activities;
-  final Color accentColor; // Pass the Mint Green here
-  const _DailyProgressStrip({required this.activities, required this.accentColor});
+  final Color cardColor;
+  const _DailyProgressStrip({required this.activities, required this.cardColor});
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -346,26 +344,42 @@ class _DailyProgressStrip extends StatelessWidget {
           return Padding(
             padding: EdgeInsets.only(right: index == activities.length - 1 ? 0 : 16.0),
             child: InkWell(
-              onTap: () { /* Navigation logic */ },
+              // --- RESTORED NAVIGATION LOGIC ---
+              onTap: () {
+                Widget? sessionScreen;
+                if (activity.title == 'Yoga') {
+                  sessionScreen = const YogaSelection();
+                } else if (activity.title == 'Breathing') {
+                  sessionScreen = BreathingSession(activity: activity);
+                } else if (activity.title == 'Meditation') {
+                  sessionScreen = const MeditationSelectionScreen();
+                }
+
+                if (sessionScreen != null) {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => sessionScreen!));
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${activity.title} session is coming soon!')));
+                }
+              },
+              // --------------------------------
               child: Container(
                 width: 110,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white, // White Card
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: accentColor.withOpacity(0.3), width: 1), // Mint border
+                  border: Border.all(color: cardColor.withOpacity(0.3), width: 1),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // Mint Green Icon Box
                     Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: accentColor.withOpacity(0.1), shape: BoxShape.circle),
-                      child: Icon(activity.icon, size: 24, color: accentColor),
+                      decoration: BoxDecoration(color: cardColor.withOpacity(0.1), shape: BoxShape.circle),
+                      child: Icon(activity.icon, size: 24, color: Colors.teal),
                     ),
                     Text(activity.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), textAlign: TextAlign.center),
-                    Text('${activity.totalTimeMinutes}m', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                    Text('${activity.totalTimeMinutes}m', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                   ],
                 ),
               ),
@@ -380,15 +394,14 @@ class _DailyProgressStrip extends StatelessWidget {
 class _DailyTasksCard extends StatelessWidget {
   final List<String> tasks;
   final bool isLoading;
-  final Color accentColor; // Mint Green
-  const _DailyTasksCard({required this.tasks, required this.isLoading, required this.accentColor});
+  final Color cardColor;
+  const _DailyTasksCard({required this.tasks, required this.isLoading, required this.cardColor});
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
     return Card(
-      // Mint Green Background for the tasks!
-      color: accentColor.withOpacity(0.1),
+      color: cardColor.withOpacity(0.1),
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -396,12 +409,12 @@ class _DailyTasksCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Icons.eco, color: accentColor), // Leaf icon for growth
+              const Icon(Icons.eco, color: Colors.orange),
               const SizedBox(width: 8),
-              Text("Daily Plan", style: TextStyle(color: accentColor, fontWeight: FontWeight.bold))
+              const Text("Daily Plan", style: TextStyle(color: Colors.brown, fontWeight: FontWeight.bold))
             ]),
             const SizedBox(height: 12),
-            ...tasks.map((task) => Padding(padding: const EdgeInsets.symmetric(vertical: 6.0), child: Row(children: [Icon(Icons.check_circle_outline, size: 20, color: accentColor), const SizedBox(width: 12), Expanded(child: Text(task, style: const TextStyle(fontSize: 15)))]))).toList()
+            ...tasks.map((task) => Padding(padding: const EdgeInsets.symmetric(vertical: 6.0), child: Row(children: [const Icon(Icons.check_circle_outline, size: 20, color: Colors.orange), const SizedBox(width: 12), Expanded(child: Text(task, style: const TextStyle(fontSize: 15)))]))).toList()
           ],
         ),
       ),
