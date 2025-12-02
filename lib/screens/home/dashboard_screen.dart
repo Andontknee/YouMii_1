@@ -1,6 +1,7 @@
 // lib/screens/home/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Required for Clipboard
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/content_hub/article.dart';
 import 'article_reader_screen.dart';
@@ -46,6 +47,59 @@ class DashboardScreen extends StatelessWidget {
 class _SupportAndCommunityTab extends StatelessWidget {
   const _SupportAndCommunityTab();
 
+  // --- UPDATED HELPER METHOD FOR EMERGENCY DIALOG ---
+  void _showEmergencyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        // --- FIX: Match Homepage Background Color ---
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent, // Removes any purple tint
+        // --------------------------------------------
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 10),
+            Text('Emergency Helplines'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHelplineTile(context, "Emergency Services", "999"),
+            const Divider(),
+            _buildHelplineTile(context, "Befrienders KL", "03-76272929"),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHelplineTile(BuildContext context, String name, String number) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(number, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+      trailing: IconButton(
+        icon: const Icon(Icons.copy, color: Colors.blueGrey),
+        tooltip: "Copy Number",
+        onPressed: () {
+          Clipboard.setData(ClipboardData(text: number));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$name number copied to clipboard.')),
+          );
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -58,7 +112,7 @@ class _SupportAndCommunityTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Card(
-              color: const Color(0xFFFFEBEE), // Light red/pink background
+              color: const Color(0xFFFFEBEE),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.red.shade200)),
               child: ListTile(
                 leading: Container(
@@ -69,9 +123,7 @@ class _SupportAndCommunityTab extends StatelessWidget {
                 title: const Text('Need help now?', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
                 subtitle: const Text('Tap for helplines & SOS', style: TextStyle(color: Colors.red)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.red),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Call 999 or Befrienders KL: 03-76272929')));
-                },
+                onTap: () => _showEmergencyDialog(context),
               ),
             ),
           ),
@@ -89,7 +141,7 @@ class _SupportAndCommunityTab extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 200, // Fixed height for the cards
+            height: 200,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -141,7 +193,6 @@ class _ArticlesTab extends StatelessWidget {
           return const Center(child: Text('No articles found.'));
         }
 
-        // Vertical list for better reading experience
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: articles.length,
@@ -215,7 +266,7 @@ class _ServiceTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       elevation: 0,
-      color: Theme.of(context).cardColor,
+      color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ListTile(
         leading: Container(
@@ -227,7 +278,6 @@ class _ServiceTile extends StatelessWidget {
         subtitle: Text('$role • $location'),
         trailing: const Icon(Icons.phone, color: Colors.green),
         onTap: () {
-          // Placeholder for calling
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Calling $name...')));
         },
       ),
@@ -235,7 +285,6 @@ class _ServiceTile extends StatelessWidget {
   }
 }
 
-// New: Wider, vertical card specifically for the Articles tab
 class _VerticalArticleCard extends StatelessWidget {
   final Article article;
   const _VerticalArticleCard({required this.article});

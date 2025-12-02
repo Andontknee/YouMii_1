@@ -1,6 +1,10 @@
+// lib/screens/home/chatbot_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/chat_service.dart';
+import '../../models/chat_message_model.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -11,242 +15,335 @@ class ChatbotScreen extends StatefulWidget {
 
 class _ChatbotScreenState extends State<ChatbotScreen> {
   final TextEditingController _controller = TextEditingController();
-  final List<Map<String, String>> _messages = [];
-  bool _isLoading = false;
+  final ChatService _chatService = ChatService();
 
-  static const String _apiKey = "AIzaSyA9TbKqGXyNdnFqovfE7Lj3y-qpYcMlI6g"; // Use your key
+  String? _currentConversationId;
+  String _selectedPersonality = 'Friend';
+  bool _isTyping = false;
 
-  final GenerativeModel _model = GenerativeModel(
-    model: 'gemini-2.5-flash', // The confirmed model name
-    apiKey: _apiKey
-  );
+  @override
+  void initState() {
+    super.initState();
+    _initializeChat();
+  }
 
-  // --- NEW ---
-  // We now have two versions of the system instructions.
-  
-  // 1. The full instruction with the mandatory disclaimer rule.
-  final _fullSystemInstruction = Content.text(
-    """Your name is YouMii, a supportive AI assistant for mental wellness. Your goals are to provide a safe space, suggest light stress-relieving activities, and share positive quotes. You must follow these strict rules: 1. **NEVER provide medical advice.** 2. **You MUST include this exact disclaimer in your response:** "Please remember, I am an AI assistant and not a substitute for professional medical advice. If you are in crisis, please contact a local emergency service or a mental health professional." 3. You are an AI; do not claim feelings. 4. Keep responses concise."""
-  );
-
-  // 2. A simpler instruction without the mandatory disclaimer rule for general conversation.
-  final _simpleSystemInstruction = Content.text(
-    """Your name is YouMii, a supportive AI assistant for mental wellness. Your goals are to provide a safe space, suggest light stress-relieving activities, and share positive quotes. You must follow these strict rules: 1. **NEVER provide medical advice.** 2. You are an AI; do not claim feelings. 3. Keep responses concise."""
-  );
-
-  // --- HEAVILY MODIFIED sendMessage FUNCTION ---
-  void _sendMessage() async {
-    if (_controller.text.isEmpty) return;
-
-    final userMessage = _controller.text;
-
-    setState(() {
-      _messages.add({'sender': 'user', 'text': userMessage});
-      _isLoading = true;
-    });
-
-    _controller.clear();
-
-    try {
-      // Step 1: Moderation Check
-      // We ask the model a simple question to classify the user's intent.
-      final moderationPrompt = [
-        Content.text("Is the following user message about a serious mental health crisis, self-harm, or a request for medical diagnosis? Answer only with 'YES' or 'NO'. User message: '$userMessage'")
-      ];
-      final moderationResponse = await _model.generateContent(moderationPrompt);
-      final isCritical = moderationResponse.text?.trim().toUpperCase() == 'YES';
-      
-      // Step 2: Choose the right system instruction
-      final instruction = isCritical ? _fullSystemInstruction : _simpleSystemInstruction;
-
-      // Step 3: Generate the actual response
-      final content = [
-        instruction,
-        Content.text(userMessage)
-      ];
-
-      final response = await _model.generateContent(content);
-      
+  void _initializeChat() async {
+    final newId = await _chatService.createNewChat();
+    if (mounted) {
       setState(() {
-        _messages.add({'sender': 'bot', 'text': response.text ?? "Sorry, I couldn't respond."});
-      });
-
-    } catch (e) {
-      setState(() {
-        _messages.add({'sender': 'bot', 'text': 'Oops! Something went wrong. Please try again.'});
-      });
-      print("Error: $e");
-    } finally {
-      setState(() {
-        _isLoading = false;
+        _currentConversationId = newId;
       });
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('YouMii Assistant'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-      ),
-      // --- MODIFIED --- We check if the messages list is empty to show the welcome screen.
-      body: Column(
-        children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? const WelcomeView() // Show welcome screen if no messages
-                : _buildChatList(),   // Show chat list if there are messages
-          ),
-          if (_isLoading)
-             const Padding(
-               padding: EdgeInsets.all(8.0),
-               child: Center(child: LinearProgressIndicator()),
-             ),
-          _buildInputArea(), // The text input field at the bottom
-        ],
+  void _loadConversation(String id) {
+    setState(() {
+      _currentConversationId = id;
+    });
+    Navigator.pop(context);
+  }
+
+  void _createNewChat() async {
+    final newId = await _chatService.createNewChat();
+    setState(() {
+      _currentConversationId = newId;
+    });
+    Navigator.pop(context);
+  }
+
+  void _handleSend() async {
+    if (_controller.text.trim().isEmpty || _currentConversationId == null) return;
+
+    final text = _controller.text.trim();
+    _controller.clear();
+    setState(() => _isTyping = true);
+
+    await _chatService.sendMessage(_currentConversationId!, text, true, personality: _selectedPersonality);
+
+    if (mounted) setState(() => _isTyping = false);
+  }
+
+  void _showPersonalitySelector() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Choose AI Personality", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            _buildPersonalityTile('Friend', 'Warm, supportive, and kind.', Icons.favorite),
+            _buildPersonalityTile('Coach', 'Logical, action-oriented, and stoic.', Icons.sports_score),
+            _buildPersonalityTile('Zen', 'Calm, mindful, and peaceful.', Icons.self_improvement),
+          ],
+        ),
       ),
     );
   }
 
-  // --- NEW WIDGET --- For the chat list
-  Widget _buildChatList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      reverse: true,
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final message = _messages[_messages.length - 1 - index];
-        final isUserMessage = message['sender'] == 'user';
-        return Align(
-          alignment: isUserMessage ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
-            padding: const EdgeInsets.all(16.0),
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-            decoration: BoxDecoration(
-              color: isUserMessage ? Colors.teal : Colors.grey[200],
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(20),
-                topRight: const Radius.circular(20),
-                bottomLeft: isUserMessage ? const Radius.circular(20) : Radius.zero,
-                bottomRight: isUserMessage ? Radius.zero : const Radius.circular(20),
-              ),
-            ),
-            child: Text(
-              message['text']!,
-              style: TextStyle(
-                color: isUserMessage ? Colors.white : Colors.black87,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        );
+  Widget _buildPersonalityTile(String name, String desc, IconData icon) {
+    final isSelected = _selectedPersonality == name;
+    final theme = Theme.of(context);
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: isSelected ? theme.primaryColor : Colors.grey[200],
+        child: Icon(icon, color: isSelected ? Colors.white : Colors.grey),
+      ),
+      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? theme.primaryColor : Colors.black)),
+      subtitle: Text(desc),
+      trailing: isSelected ? Icon(Icons.check, color: theme.primaryColor) : null,
+      onTap: () {
+        setState(() => _selectedPersonality = name);
+        Navigator.pop(context);
       },
     );
   }
 
-  // --- NEW WIDGET --- For the text input area
-  Widget _buildInputArea() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            offset: const Offset(0, -2),
-            blurRadius: 4,
-            color: Colors.black.withOpacity(0.1),
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    // --- COLORS ---
+    const kChatBackground = Color(0xFF131314); // Gemini Dark
+    const kSurfaceColor = Color(0xFF1E1E20);
+    const kAccentColor = Color(0xFFA4A5F5); // Periwinkle
+    const kInputFillColor = Color(0xFF282828); // Dark Grey for Input Box
+
+    return Scaffold(
+      backgroundColor: kChatBackground,
+
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.grey),
+        title: const Text('YouMii', style: TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.psychology),
+            tooltip: "Change Personality",
+            onPressed: _showPersonalitySelector,
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: 'Type your message...',
-                hintStyle: TextStyle(color: Colors.grey[400]),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+
+      drawer: Drawer(
+        backgroundColor: kSurfaceColor,
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white10))),
+              child: Center(
+                child: ListTile(
+                  leading: const CircleAvatar(backgroundColor: kAccentColor, child: Icon(Icons.person, color: Colors.white)),
+                  title: Text(user?.displayName ?? 'User', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: Text(user?.email ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ),
-                filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
-              enabled: !_isLoading,
-              onSubmitted: (_) => _isLoading ? null : _sendMessage(),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add, color: kAccentColor),
+              title: const Text("New chat", style: TextStyle(color: kAccentColor, fontWeight: FontWeight.bold)),
+              onTap: _createNewChat,
+            ),
+            const Divider(color: Colors.white10),
+            const Padding(
+              padding: EdgeInsets.only(left: 16, top: 10, bottom: 5),
+              child: Align(alignment: Alignment.centerLeft, child: Text("Recent", style: TextStyle(color: Colors.grey, fontSize: 12))),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _chatService.getConversations(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                  final docs = snapshot.data!.docs;
+
+                  return ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final doc = docs[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      final title = data['title'] ?? 'New Chat';
+                      final id = doc.id;
+                      final isActive = id == _currentConversationId;
+
+                      return ListTile(
+                        leading: const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.grey),
+                        title: Text(title, style: TextStyle(color: isActive ? Colors.white : Colors.grey[400], fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        tileColor: isActive ? kAccentColor.withOpacity(0.1) : null,
+                        onTap: () => _loadConversation(id),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 16, color: Colors.grey),
+                          onPressed: () {
+                            _chatService.deleteConversation(id);
+                            if (isActive) _initializeChat();
+                          },
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      body: Column(
+        children: [
+          // --- CHAT AREA ---
+          Expanded(
+            child: _currentConversationId == null
+                ? const Center(child: CircularProgressIndicator())
+                : StreamBuilder<List<ChatMessage>>(
+              stream: _chatService.getMessages(_currentConversationId!),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final messages = snapshot.data ?? [];
+
+                if (messages.isEmpty) {
+                  return _buildEmptyState(user?.displayName ?? 'Friend');
+                }
+
+                return ListView.builder(
+                  reverse: true,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    return _ChatBubble(message: messages[index]);
+                  },
+                );
+              },
             ),
           ),
-          const SizedBox(width: 8),
-          FloatingActionButton(
-            onPressed: _isLoading ? null : _sendMessage,
-            backgroundColor: Colors.teal,
-            elevation: 0,
-            mini: true,
-            child: const Icon(Icons.send, color: Colors.white, size: 20),
+
+          if (_isTyping)
+            const Padding(
+              padding: EdgeInsets.only(left: 20, bottom: 10),
+              child: Align(alignment: Alignment.centerLeft, child: Text("YouMii is thinking...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 12))),
+            ),
+
+          // --- INPUT AREA ---
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: kChatBackground,
+            child: Column(
+              children: [
+                // Container for the Capsule Shape
+                Container(
+                  decoration: BoxDecoration(
+                    color: kInputFillColor, // #282828
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextField(
+                          controller: _controller,
+                          textCapitalization: TextCapitalization.sentences,
+                          style: const TextStyle(color: Colors.white), // White text
+                          decoration: const InputDecoration(
+                            hintText: 'Message YouMii...',
+                            hintStyle: TextStyle(color: Colors.grey),
+                            // --- FIX: Explicitly set fillColor here to override Global White ---
+                            filled: true,
+                            fillColor: kInputFillColor,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 0, vertical: 14),
+                          ),
+                          onSubmitted: (_) => _handleSend(),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send_rounded, color: kAccentColor),
+                        onPressed: _handleSend,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "YouMii may display inaccurate info. Not a medical professional. Seek help if in crisis.",
+                  style: TextStyle(color: Colors.grey, fontSize: 10),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String name) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Mascot Image
+          SizedBox(
+            height: 120,
+            width: 120,
+            child: Image.asset('assets/mascot.png', fit: BoxFit.contain),
+          ),
+          const SizedBox(height: 20),
+          Text("Hello, $name", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFFA4A5F5))),
+          const SizedBox(height: 8),
+          const Text("How can I help you today?", style: TextStyle(fontSize: 18, color: Colors.grey)),
         ],
       ),
     );
   }
 }
 
-// --- NEW WIDGET --- This is the welcome screen inspired by Copilot
-class WelcomeView extends StatelessWidget {
-  const WelcomeView({super.key});
+class _ChatBubble extends StatelessWidget {
+  final ChatMessage message;
+  const _ChatBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const Text(
-            'Welcome to YouMii',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.teal,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Your personal space for mindfulness and well-being.',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.teal.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.teal.withOpacity(0.2)),
-            ),
-            child: Text(
-              'YouMii is an AI assistant for wellness, not a medical professional. For any crisis, please contact emergency services.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.teal[800],
-                height: 1.5,
+    final isUser = message.isUser;
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
+        decoration: BoxDecoration(
+          color: isUser ? const Color(0xFF2F2F2F) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isUser) ...[
+              Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 12,
+                    backgroundImage: AssetImage('assets/mascot.png'),
+                    backgroundColor: Colors.transparent,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text("YouMii", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
+                ],
               ),
-              textAlign: TextAlign.center,
+              const SizedBox(height: 4),
+            ],
+            Text(
+              message.text,
+              style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
-

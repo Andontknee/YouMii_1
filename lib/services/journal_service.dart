@@ -10,64 +10,58 @@ class JournalService {
   factory JournalService() => _instance;
 
   JournalService._internal() {
-    _notebooks = [
-      JournalNotebook(id: 'daily', title: 'Daily Notes', icon: Icons.edit_note, createdAt: Timestamp.now(), color: Colors.blue, entryCount: 1),
-      JournalNotebook(id: 'reflection', title: 'Self-Reflection', icon: Icons.self_improvement, createdAt: Timestamp.now(), color: Colors.purple, entryCount: 0),
-    ];
-    _entries = { 'daily': [ JournalEntry.createNew(notebookId: 'daily', title: 'First Entry', content: 'Welcome!') ] };
+    // Mock data initialization if needed
+    _notebooks = [];
+    _entries = {};
   }
 
   late List<JournalNotebook> _notebooks;
   late Map<String, List<JournalEntry>> _entries;
 
-  // Fetch Notebooks
   Future<List<JournalNotebook>> getNotebooks() async {
     await Future.delayed(const Duration(milliseconds: 50));
     return _notebooks;
   }
 
-  // Add Notebook
-  Future<void> addNotebook(String title) async {
+  // UPDATED: Now requires an imagePath (either from assets or local storage)
+  Future<void> addNotebook(String title, String imagePath) async {
     final newNotebook = JournalNotebook(
       id: 'notebook_${DateTime.now().millisecondsSinceEpoch}',
       title: title,
-      icon: Icons.folder_outlined,
+      icon: Icons.book,
       createdAt: Timestamp.now(),
-      color: Colors.deepOrange,
+      colorIndex: 0, // We ignore this now
       entryCount: 0,
+      coverImagePath: imagePath, // SAVE THE PATH
     );
     _notebooks.add(newNotebook);
     _entries[newNotebook.id] = [];
   }
 
-  // --- MISSING METHODS RESTORED BELOW ---
-
-  // Update Notebook Title
   Future<void> updateNotebook(String notebookId, String newTitle) async {
     final index = _notebooks.indexWhere((n) => n.id == notebookId);
     if (index != -1) {
       final old = _notebooks[index];
-      // Create a new object with the updated title
       _notebooks[index] = JournalNotebook(
         id: old.id,
         title: newTitle,
         icon: old.icon,
         createdAt: old.createdAt,
-        color: old.color,
+        colorIndex: old.colorIndex,
         entryCount: old.entryCount,
         isDeleted: old.isDeleted,
         deletedAt: old.deletedAt,
+        coverImagePath: old.coverImagePath,
       );
     }
   }
 
-  // Delete Notebook
   Future<void> deleteNotebook(String notebookId) async {
     _notebooks.removeWhere((n) => n.id == notebookId);
     _entries.remove(notebookId);
   }
 
-  // ---------------------------------------
+  // --- Entry Methods ---
 
   void addEntryToNotebook(String notebookId, JournalEntry newEntry) {
     if (!_entries.containsKey(notebookId)) _entries[notebookId] = [];
@@ -76,7 +70,7 @@ class JournalService {
 
   List<JournalEntry> getEntriesForNotebook(String notebookId) => _entries[notebookId] ?? [];
 
-  void updateEntry(String notebookId, String entryId, String newTitle, String newContent) {
+  void updateEntry(String notebookId, String entryId, String newTitle, String newContent, List<String>? newImages) {
     if (_entries.containsKey(notebookId)) {
       final index = _entries[notebookId]!.indexWhere((e) => e.id == entryId);
       if (index != -1) {
@@ -88,6 +82,7 @@ class JournalService {
           content: newContent,
           createdAt: oldEntry.createdAt,
           mood: oldEntry.mood,
+          attachedImagePaths: newImages,
         );
       }
     }

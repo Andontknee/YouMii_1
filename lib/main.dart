@@ -2,28 +2,31 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:youmii/firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
+import 'package:youmii/firebase_options.dart';
 
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/registration_screen.dart';
 import 'screens/home/home_screen.dart';
 
-// --- 🎨 HYBRID PALETTE: COTTON CANDY + MINTY FRESH ---
+// --- 🎨 VIBRANT LAVENDER & CORAL PALETTE ---
 
-// 1. Cotton Candy (Emotions, Auth, Navigation)
-const Color kPrimaryLavender = Color(0xFFB298E7); // Soft Pop Purple
-const Color kSoftPink = Color(0xFFF5B8D5);        // Mood/Heart
+// Brand / Primary
+const Color kPrimaryLavender = Color(0xFF906DD1);
+const Color kDeepLavender = Color(0xFF8A75AE);
 
-// 2. Minty Fresh (Actions, Growth, Success)
-const Color kFreshMint = Color(0xFF98FBCB);       // Vibrant Mint
-const Color kSageGreen = Color(0xFF7FCFA8);       // Balanced Green
+// Backgrounds
+// --- FIX: RESTORED PALE BLUE BACKGROUND ---
+const Color kAppBackground = Color(0xFFEBF4FA);
+const Color kCardSurface = Color(0xFFB099C8);
 
-// 3. Neutrals
-const Color kAppBackground = Color(0xFFF9FAFC);   // Clean Cloud White
-const Color kCardSurface = Color(0xFFFFFFFF);     // Pure White
-const Color kTextPrimary = Color(0xFF2D2D3A);     // Soft Black
-const Color kTextSecondary = Color(0xFF888899);   // Muted Grey
+// Typography
+const Color kTextPrimary = Colors.black;
+const Color kTextSecondary = Colors.black87;
+
+// Accents
+const Color kAccentError = Color(0xFFDFA8A8);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,28 +43,29 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'YouMii',
+      debugShowCheckedModeBanner: false,
 
+      // --- THEME CONFIGURATION ---
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
 
-        // Global Colors
-        scaffoldBackgroundColor: kAppBackground,
+        // 1. Global Colors
+        scaffoldBackgroundColor: kAppBackground, // Ensure this is used
         primaryColor: kPrimaryLavender,
         cardColor: kCardSurface,
+        canvasColor: kAppBackground,
 
-        // Define both palettes in the ColorScheme
         colorScheme: const ColorScheme.light(
-          primary: kPrimaryLavender,    // Cotton Candy
-          secondary: kSageGreen,        // Minty Fresh (Used for accents/floating buttons)
-          tertiary: kSoftPink,          // Extra Cotton Candy accent
+          primary: kPrimaryLavender,
+          secondary: kDeepLavender,
           surface: kCardSurface,
-          onPrimary: Colors.white,
-          onSecondary: Colors.white,
+          error: kAccentError,
+          onPrimary: Colors.black,
           onSurface: kTextPrimary,
         ),
 
-        // Typography
+        // 2. Typography
         fontFamily: 'Poppins',
         textTheme: const TextTheme(
           headlineLarge: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700),
@@ -69,9 +73,13 @@ class MyApp extends StatelessWidget {
           headlineSmall: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700),
           titleLarge: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w600),
           titleMedium: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w600),
+          titleSmall: TextStyle(color: kTextSecondary, fontWeight: FontWeight.w600),
           bodyLarge: TextStyle(color: kTextPrimary, fontSize: 16),
-          bodyMedium: TextStyle(color: kTextSecondary, fontSize: 14),
+          bodyMedium: TextStyle(color: kTextPrimary, fontSize: 14),
+          bodySmall: TextStyle(color: kTextSecondary, fontSize: 12),
         ),
+
+        // 3. Component Themes
 
         // AppBar
         appBarTheme: const AppBarTheme(
@@ -80,49 +88,73 @@ class MyApp extends StatelessWidget {
           centerTitle: true,
           iconTheme: IconThemeData(color: kTextPrimary),
           titleTextStyle: TextStyle(color: kTextPrimary, fontSize: 20, fontWeight: FontWeight.w600),
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          ),
         ),
 
-        // Cards: Clean White with Soft Shadow
+        // Cards
         cardTheme: CardThemeData(
           color: kCardSurface,
-          elevation: 0, // Flat look
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: const BorderSide(color: Color(0xFFF0F0F5), width: 1), // Subtle border
-          ),
+          elevation: 2,
+          shadowColor: Colors.black12,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           margin: const EdgeInsets.only(bottom: 16),
         ),
 
-        // Buttons (Lavender - Cotton Candy Style)
+        // Input Fields
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: const BorderSide(color: Colors.transparent),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(20),
+            borderSide: const BorderSide(color: kDeepLavender, width: 2),
+          ),
+          hintStyle: const TextStyle(color: Colors.grey),
+          labelStyle: const TextStyle(color: kTextPrimary),
+        ),
+
+        // Buttons
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: kPrimaryLavender,
-            foregroundColor: Colors.white,
-            elevation: 0,
+            foregroundColor: Colors.black,
+            elevation: 4,
+            shadowColor: Colors.black26,
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
             textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
         ),
 
-        // Inputs
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: Color(0xFFEEEEF2))),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: kPrimaryLavender, width: 2)),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.black,
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
 
-        // Bottom Nav
+        // Bottom Navigation Bar
         bottomAppBarTheme: const BottomAppBarThemeData(
-          color: Colors.white,
+          color: Colors.white, // --- FIX: FORCE WHITE ---
           elevation: 10,
+          shadowColor: Colors.black12,
           surfaceTintColor: Colors.white,
         ),
 
         // Icons
-        iconTheme: const IconThemeData(color: kPrimaryLavender),
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
 
       home: const AuthGate(),

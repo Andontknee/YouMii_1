@@ -1,7 +1,6 @@
 // lib/screens/home/home_screen.dart
 
 import 'package:flutter/material.dart';
-import '../journal/journal_hub_screen.dart';
 import 'dashboard_screen.dart';
 import 'notebooks_screen.dart';
 import 'profile_screen.dart';
@@ -14,13 +13,12 @@ import '/services/journal_service.dart';
 import '/models/journal_model.dart';
 import '/models/wellness_tasks_data.dart';
 import 'journal_entry_screen.dart';
-
-// --- RESTORED SESSION IMPORTS ---
 import '../sessions/breathing_session.dart';
 import '../sessions/yoga_selection.dart';
 import '../sessions/meditation_selection.dart';
-// -------------------------------
+import '../journal/journal_hub_screen.dart';
 
+// --- MOOD LOG DATA ---
 class MoodItem {
   final String emoji;
   final String label;
@@ -49,7 +47,11 @@ class _HomeScreenState extends State<HomeScreen> {
     const DashboardScreen(),
     const ProfileScreen(),
   ];
-  void _onItemTapped(int index) { setState(() { _selectedIndex = index; }); }
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,31 +59,47 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Center(child: _widgetOptions.elementAt(_selectedIndex)),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context,
-            MaterialPageRoute(builder: (context) => const ChatbotScreen())),
-        backgroundColor: theme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 4.0,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.hub_outlined, size: 30),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+
+      // --- FIXED NAVIGATION BAR ---
       bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 10.0,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: <Widget>[
-              _buildNavItem(icon: Icons.home_rounded, index: 0, label: 'Home'),
-              _buildNavItem(icon: Icons.book_rounded, index: 1, label: 'Journal'),
-              const SizedBox(width: 40),
-              _buildNavItem(icon: Icons.grid_view_rounded, index: 2, label: 'Resources'),
-              _buildNavItem(icon: Icons.person_rounded, index: 3, label: 'Profile'),
-            ],
-          ),
+        // Force White background
+        color: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 10.0,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: 70,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: <Widget>[
+            _buildNavItem(icon: Icons.home_rounded, index: 0, label: 'Home'),
+            _buildNavItem(icon: Icons.book_rounded, index: 1, label: 'Journal'),
+
+            // --- STATIC CENTER BUTTON ---
+            // Fixed in place, but styled to look vibrant
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatbotScreen())),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                    color: theme.primaryColor, // Lavender
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                          color: theme.primaryColor.withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4)
+                      )
+                    ]
+                ),
+                child: const Icon(Icons.hub_outlined, color: Colors.white, size: 28),
+              ),
+            ),
+            // -----------------------------
+
+            _buildNavItem(icon: Icons.grid_view_rounded, index: 2, label: 'Resources'),
+            _buildNavItem(icon: Icons.person_rounded, index: 3, label: 'Profile'),
+          ],
         ),
       ),
     );
@@ -95,6 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
           size: 28),
       onPressed: () => _onItemTapped(index),
       tooltip: label,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
     );
   }
 }
@@ -189,6 +209,114 @@ class _HomeContentState extends State<HomeContent> {
     );
   }
 
+  void _showJournalPromptDialog(Quote quote) {
+    final titleController = TextEditingController(text: "Daily Inspiration");
+    final contentController = TextEditingController(
+        text: '"${quote.text}"\n- ${quote.author}\n\nMy reflection on this:\n');
+    final newNotebookController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            String? selectedNotebookId;
+            bool isCreatingNewNotebook = false;
+
+            void showCreateNotebookDialog() {
+              showDialog(
+                context: context,
+                builder: (innerContext) => AlertDialog(
+                  title: const Text('Create New Notebook'),
+                  content: TextField(controller: newNotebookController, autofocus: true, decoration: const InputDecoration(labelText: 'Title')),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(innerContext), child: const Text('Cancel')),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (newNotebookController.text.trim().isNotEmpty) {
+                          await _journalService.addNotebook(newNotebookController.text.trim(), 'assets/covers/1.jpg');
+                          Navigator.pop(innerContext);
+                          setDialogState(() {});
+                        }
+                      },
+                      child: const Text('Create'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return FutureBuilder<List<JournalNotebook>>(
+              future: _journalService.getNotebooks(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const AlertDialog(content: Center(child: CircularProgressIndicator()));
+                }
+
+                final notebooks = snapshot.data!;
+                if (notebooks.isNotEmpty && selectedNotebookId == null) {
+                  selectedNotebookId = notebooks.first.id;
+                }
+
+                void saveEntry() {
+                  if (selectedNotebookId == null) return;
+                  final newEntry = JournalEntry.createNew(
+                    notebookId: selectedNotebookId!,
+                    title: titleController.text.trim(),
+                    content: contentController.text.trim(),
+                    images: null,
+                  );
+                  _journalService.addEntryToNotebook(selectedNotebookId!, newEntry);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entry saved!')));
+                }
+
+                return AlertDialog(
+                  title: const Text('Save to Journal'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!isCreatingNewNotebook)
+                        DropdownButton<String>(
+                          value: selectedNotebookId,
+                          isExpanded: true,
+                          hint: const Text('Select a Notebook'),
+                          items: [
+                            ...notebooks.map((n) => DropdownMenuItem(value: n.id, child: Text(n.title))).toList(),
+                            const DropdownMenuItem(value: 'create_new', child: Text('+ Create New Notebook...')),
+                          ],
+                          onChanged: (value) {
+                            if (value == 'create_new') {
+                              showCreateNotebookDialog();
+                            } else {
+                              setDialogState(() {
+                                selectedNotebookId = value;
+                              });
+                            }
+                          },
+                        ),
+                      const SizedBox(height: 20),
+                      TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Title')),
+                      const SizedBox(height: 16),
+                      TextField(controller: contentController, decoration: const InputDecoration(labelText: 'Content'), maxLines: 4),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                    ElevatedButton(
+                      onPressed: selectedNotebookId == null ? null : saveEntry,
+                      child: const Text('Save'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -219,7 +347,7 @@ class _HomeContentState extends State<HomeContent> {
                 builder: (context, quoteSnapshot) {
                   if (quoteSnapshot.connectionState == ConnectionState.waiting) return const Center(child: LinearProgressIndicator());
                   final dailyQuote = quoteSnapshot.data ?? Quote(text: "Loading...", author: "");
-                  return _DailyQuoteCard(quote: dailyQuote, onJournalTap: () {});
+                  return _DailyQuoteCard(quote: dailyQuote, onJournalTap: () => _showJournalPromptDialog(dailyQuote));
                 }),
 
             const SizedBox(height: 20),
@@ -236,12 +364,11 @@ class _HomeContentState extends State<HomeContent> {
             // --- 3. ACTIVITIES & PLANS ---
             Padding(padding: const EdgeInsets.only(left: 4.0, bottom: 12.0), child: Text('Wellness Tools', style: theme.textTheme.titleLarge)),
 
-            // Pass the color and ensure navigation is active
             _DailyProgressStrip(activities: _dailyActivities, cardColor: const Color(0xFFE0F2F1)),
 
             const SizedBox(height: 20),
 
-            _DailyTasksCard(tasks: _aiTasks, isLoading: _isLoadingTasks, cardColor: const Color(0xFFFFF8E1)),
+            _DailyTasksCard(tasks: _aiTasks, isLoading: _isLoadingTasks, cardColor: const Color(0xFFA4A5F5)),
 
             const SizedBox(height: 20),
           ],
@@ -261,21 +388,32 @@ class _DailyQuoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      color: const Color(0xFFE3F2FD), // Pastel Blue
+      color: const Color(0xFF9EF0FF),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Icons.format_quote_rounded, color: theme.primaryColor, size: 24),
+              Icon(Icons.format_quote_rounded, color: Colors.blue.shade700, size: 24),
               const SizedBox(width: 8),
-              Text('Quote of the Day', style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
+              Text('Quote of the Day', style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
             ]),
             const SizedBox(height: 12),
             Text('"${quote.text}"', style: theme.textTheme.titleMedium!.copyWith(height: 1.5)),
             const SizedBox(height: 12),
             Align(alignment: Alignment.centerRight, child: Text('- ${quote.author}', style: theme.textTheme.bodySmall)),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.black12),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onJournalTap,
+                icon: Icon(Icons.book_outlined, color: theme.primaryColor),
+                label: Text('Journal this', style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
+              ),
+            ),
           ],
         ),
       ),
@@ -288,39 +426,101 @@ class _MoodLogCard extends StatelessWidget {
   final Function(MoodItem) onMoodSelected;
   final VoidCallback onReset;
   const _MoodLogCard({required this.selectedMood, required this.onMoodSelected, required this.onReset});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final moodColor = theme.colorScheme.tertiary;
 
+    // Color for the "Summary" state (When mood is already logged) - Kept Lavender/Periwinkle
+    const summaryCardColor = Color(0xFFCCCCFF);
+
+    // --- FIX: NEW COLOR FOR INPUT STATE ---
+
+    const inputCardColor = Color(0xffFFAE25);
+    // -------------------------------------
+
+    // --- STATE 1: MOOD LOGGED (SUMMARY VIEW) ---
     if (selectedMood != null) {
       return Card(
-        color: moodColor.withOpacity(0.15),
+        elevation: 2.0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        color: summaryCardColor,
         child: InkWell(
-          onTap: onReset, borderRadius: BorderRadius.circular(24),
+          onTap: onReset,
+          borderRadius: BorderRadius.circular(15),
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
             child: Row(
               children: [
-                Text(selectedMood!.emoji, style: const TextStyle(fontSize: 40)),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: selectedMood!.color, width: 2),
+                  ),
+                  child: Text(selectedMood!.emoji, style: const TextStyle(fontSize: 32)),
+                ),
                 const SizedBox(width: 16),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Mood Logged', style: TextStyle(color: Colors.grey[700], fontSize: 12)), Text(selectedMood!.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))])),
-                Icon(Icons.edit, color: moodColor),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Mood Logged', style: theme.textTheme.bodySmall!.copyWith(color: Colors.grey[700])),
+                      Text(selectedMood!.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.edit, color: theme.primaryColor),
               ],
             ),
           ),
         ),
       );
     }
+
+    // --- STATE 2: INPUT VIEW (Your Screenshot) ---
     return Card(
+      elevation: 4.0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      color: inputCardColor, // <--- APPLIED THE NEW YELLOW COLOR HERE
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('How do you feel today?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: MoodItem.allMoods.map((mood) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4.0), child: InkWell(onTap: () => onMoodSelected(mood), borderRadius: BorderRadius.circular(30), child: Container(padding: const EdgeInsets.symmetric(vertical: 8.0), decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.grey.shade200)), child: Text(mood.emoji, style: const TextStyle(fontSize: 28), textAlign: TextAlign.center)))))).toList()),
+            Text(
+                'How do you feel today?',
+                style: theme.textTheme.titleMedium!.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.brown.shade700 // Changed text to brown for better contrast on yellow
+                )
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: MoodItem.allMoods.map((mood) {
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                    child: InkWell(
+                      onTap: () => onMoodSelected(mood),
+                      borderRadius: BorderRadius.circular(30),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white, // White background behind emojis to make them pop
+                          border: Border.all(color: Colors.orange.withOpacity(0.1), width: 1),
+                        ),
+                        child: Text(mood.emoji, style: const TextStyle(fontSize: 32)),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),
@@ -344,24 +544,15 @@ class _DailyProgressStrip extends StatelessWidget {
           return Padding(
             padding: EdgeInsets.only(right: index == activities.length - 1 ? 0 : 16.0),
             child: InkWell(
-              // --- RESTORED NAVIGATION LOGIC ---
               onTap: () {
                 Widget? sessionScreen;
-                if (activity.title == 'Yoga') {
-                  sessionScreen = const YogaSelection();
-                } else if (activity.title == 'Breathing') {
-                  sessionScreen = BreathingSession(activity: activity);
-                } else if (activity.title == 'Meditation') {
-                  sessionScreen = const MeditationSelectionScreen();
-                }
+                if (activity.title == 'Yoga') sessionScreen = const YogaSelection();
+                else if (activity.title == 'Breathing') sessionScreen = BreathingSession(activity: activity);
+                else if (activity.title == 'Meditation') sessionScreen = const MeditationSelectionScreen();
 
-                if (sessionScreen != null) {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => sessionScreen!));
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${activity.title} session is coming soon!')));
-                }
+                if (sessionScreen != null) { Navigator.push(context, MaterialPageRoute(builder: (context) => sessionScreen!)); }
+                else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${activity.title} session is coming soon!'))); }
               },
-              // --------------------------------
               child: Container(
                 width: 110,
                 padding: const EdgeInsets.all(16),
@@ -401,7 +592,7 @@ class _DailyTasksCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isLoading) return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
     return Card(
-      color: cardColor.withOpacity(0.1),
+      color: cardColor.withOpacity(0.25),
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -409,12 +600,12 @@ class _DailyTasksCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              const Icon(Icons.eco, color: Colors.orange),
+              Icon(Icons.eco, color: cardColor),
               const SizedBox(width: 8),
-              const Text("Daily Plan", style: TextStyle(color: Colors.brown, fontWeight: FontWeight.bold))
+              const Text("Daily Plan", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold))
             ]),
             const SizedBox(height: 12),
-            ...tasks.map((task) => Padding(padding: const EdgeInsets.symmetric(vertical: 6.0), child: Row(children: [const Icon(Icons.check_circle_outline, size: 20, color: Colors.orange), const SizedBox(width: 12), Expanded(child: Text(task, style: const TextStyle(fontSize: 15)))]))).toList()
+            ...tasks.map((task) => Padding(padding: const EdgeInsets.symmetric(vertical: 6.0), child: Row(children: [Icon(Icons.check_circle_outline, size: 20, color: cardColor), const SizedBox(width: 12), Expanded(child: Text(task, style: const TextStyle(fontSize: 15, color: Colors.black87)))]))).toList()
           ],
         ),
       ),

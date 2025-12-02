@@ -109,18 +109,25 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 // --- Logo / Icon Placeholder ---
+                // --- MASCOT IMAGE ---
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(8), // Reduced padding slightly
                     decoration: BoxDecoration(
                       color: theme.primaryColor.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.spa, size: 60, color: theme.primaryColor),
+                    // Use the asset image instead of the Icon
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/mascot.png',
+                        height: 100, // Adjust size as needed
+                        width: 100,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
-
                 Text(
                   'Welcome Back!',
                   textAlign: TextAlign.center,
