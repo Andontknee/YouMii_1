@@ -12,18 +12,21 @@ import '/models/activity_model.dart';
 import '/services/journal_service.dart';
 import '/models/journal_model.dart';
 import '/models/wellness_tasks_data.dart';
+import '/models/wellness_tasks_data.dart';
 import 'journal_entry_screen.dart';
 import '../sessions/breathing_session.dart';
 import '../sessions/yoga_selection.dart';
 import '../sessions/meditation_selection.dart';
 import '../journal/journal_hub_screen.dart';
 
-// --- MOOD LOG DATA ---
+// --- MOOD LOG DATA STRUCTURE ---
 class MoodItem {
   final String emoji;
   final String label;
   final Color color;
+
   MoodItem(this.emoji, this.label, this.color);
+
   static final List<MoodItem> allMoods = [
     MoodItem('😀', 'Fantastic', Colors.green),
     MoodItem('😌', 'Calm', Colors.teal),
@@ -32,6 +35,7 @@ class MoodItem {
     MoodItem('😡', 'Angry', Colors.deepPurple),
   ];
 }
+// --- END MOOD LOG DATA STRUCTURE ---
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,11 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const DashboardScreen(),
     const ProfileScreen(),
   ];
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _onItemTapped(int index) { setState(() { _selectedIndex = index; }); }
 
   @override
   Widget build(BuildContext context) {
@@ -59,47 +59,32 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Center(child: _widgetOptions.elementAt(_selectedIndex)),
-
-      // --- FIXED NAVIGATION BAR ---
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(context,
+            MaterialPageRoute(builder: (context) => const ChatbotScreen())),
+        backgroundColor: theme.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 4.0,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.hub_outlined, size: 30),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
-        // Force White background
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 10.0,
         color: Colors.white,
-        surfaceTintColor: Colors.white,
-        elevation: 10.0,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        height: 70,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: <Widget>[
-            _buildNavItem(icon: Icons.home_rounded, index: 0, label: 'Home'),
-            _buildNavItem(icon: Icons.book_rounded, index: 1, label: 'Journal'),
-
-            // --- STATIC CENTER BUTTON ---
-            // Fixed in place, but styled to look vibrant
-            GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatbotScreen())),
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                    color: theme.primaryColor, // Lavender
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                          color: theme.primaryColor.withOpacity(0.4),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4)
-                      )
-                    ]
-                ),
-                child: const Icon(Icons.hub_outlined, color: Colors.white, size: 28),
-              ),
-            ),
-            // -----------------------------
-
-            _buildNavItem(icon: Icons.grid_view_rounded, index: 2, label: 'Resources'),
-            _buildNavItem(icon: Icons.person_rounded, index: 3, label: 'Profile'),
-          ],
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: <Widget>[
+              _buildNavItem(icon: Icons.home_rounded, index: 0, label: 'Home'),
+              _buildNavItem(icon: Icons.book_rounded, index: 1, label: 'Journal'),
+              const SizedBox(width: 40),
+              _buildNavItem(icon: Icons.grid_view_rounded, index: 2, label: 'Resources'),
+              _buildNavItem(icon: Icons.person_rounded, index: 3, label: 'Profile'),
+            ],
+          ),
         ),
       ),
     );
@@ -113,8 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
           size: 28),
       onPressed: () => _onItemTapped(index),
       tooltip: label,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(),
     );
   }
 }
@@ -135,12 +118,72 @@ class _HomeContentState extends State<HomeContent> {
   List<String> _aiTasks = [];
   bool _isLoadingTasks = true;
 
+  // Streak State
+  int _streakCount = 0;
+  bool _isLoadingStreak = true;
+
   @override
   void initState() {
     super.initState();
     _fetchQuote();
     _checkTodayMood();
     _fetchDailyTasks();
+    _updateLoginStreak();
+  }
+
+  // --- UPDATED & ROBUST STREAK LOGIC ---
+  Future<void> _updateLoginStreak() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final today = DateTime.now();
+    final todayStr = today.toIso8601String().substring(0, 10);
+
+    final yesterday = today.subtract(const Duration(days: 1));
+    final yesterdayStr = yesterday.toIso8601String().substring(0, 10);
+
+    try {
+      final docSnapshot = await userDocRef.get();
+      int newStreak = 0;
+
+      if (docSnapshot.exists && docSnapshot.data() != null) {
+        final data = docSnapshot.data() as Map<String, dynamic>;
+        final lastLoginDate = data['lastLoginDate'] as String? ?? '';
+        final currentStreak = data['currentStreak'] as int? ?? 0;
+
+        if (lastLoginDate == todayStr) {
+          // Already logged in today.
+          // FIX: Ensure it is at least 1
+          newStreak = (currentStreak > 0) ? currentStreak : 1;
+        } else if (lastLoginDate == yesterdayStr) {
+          // Logged in yesterday, increment!
+          newStreak = currentStreak + 1;
+        } else {
+          // Streak broken or older than yesterday, reset to 1
+          newStreak = 1;
+        }
+      } else {
+        // First time user, start at 1
+        newStreak = 1;
+      }
+
+      // Update Database and UI
+      // We perform a merge set to handle both new and existing docs safely
+      await userDocRef.set({
+        'lastLoginDate': todayStr,
+        'currentStreak': newStreak,
+      }, SetOptions(merge: true));
+
+      if (mounted) setState(() => _streakCount = newStreak);
+
+    } catch (e) {
+      print("Streak Error: $e");
+      // Even on error, show 1 locally for good UX
+      if (mounted) setState(() => _streakCount = 1);
+    } finally {
+      if (mounted) setState(() => _isLoadingStreak = false);
+    }
   }
 
   void _fetchQuote() {
@@ -199,121 +242,32 @@ class _HomeContentState extends State<HomeContent> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
         title: Row(children: [Text(mood.emoji, style: const TextStyle(fontSize: 24)), const SizedBox(width: 8), Text('Feeling ${mood.label}?')]),
-        content: TextField(controller: noteController, maxLength: 120, maxLines: 3, decoration: const InputDecoration(hintText: 'Why do you feel this way?', border: OutlineInputBorder())),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Add a short note about your day (optional):'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: noteController,
+              maxLength: 120,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Why do you feel this way?',
+                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () { setState(() => _selectedMood = mood); _saveMoodToFirebase(mood, null); Navigator.pop(context); }, child: const Text('Skip Note')),
           ElevatedButton(onPressed: () { setState(() => _selectedMood = mood); _saveMoodToFirebase(mood, noteController.text.trim()); Navigator.pop(context); }, child: const Text('Save Log')),
         ],
       ),
-    );
-  }
-
-  void _showJournalPromptDialog(Quote quote) {
-    final titleController = TextEditingController(text: "Daily Inspiration");
-    final contentController = TextEditingController(
-        text: '"${quote.text}"\n- ${quote.author}\n\nMy reflection on this:\n');
-    final newNotebookController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            String? selectedNotebookId;
-            bool isCreatingNewNotebook = false;
-
-            void showCreateNotebookDialog() {
-              showDialog(
-                context: context,
-                builder: (innerContext) => AlertDialog(
-                  title: const Text('Create New Notebook'),
-                  content: TextField(controller: newNotebookController, autofocus: true, decoration: const InputDecoration(labelText: 'Title')),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(innerContext), child: const Text('Cancel')),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (newNotebookController.text.trim().isNotEmpty) {
-                          await _journalService.addNotebook(newNotebookController.text.trim(), 'assets/covers/1.jpg');
-                          Navigator.pop(innerContext);
-                          setDialogState(() {});
-                        }
-                      },
-                      child: const Text('Create'),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return FutureBuilder<List<JournalNotebook>>(
-              future: _journalService.getNotebooks(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const AlertDialog(content: Center(child: CircularProgressIndicator()));
-                }
-
-                final notebooks = snapshot.data!;
-                if (notebooks.isNotEmpty && selectedNotebookId == null) {
-                  selectedNotebookId = notebooks.first.id;
-                }
-
-                void saveEntry() {
-                  if (selectedNotebookId == null) return;
-                  final newEntry = JournalEntry.createNew(
-                    notebookId: selectedNotebookId!,
-                    title: titleController.text.trim(),
-                    content: contentController.text.trim(),
-                    images: null,
-                  );
-                  _journalService.addEntryToNotebook(selectedNotebookId!, newEntry);
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entry saved!')));
-                }
-
-                return AlertDialog(
-                  title: const Text('Save to Journal'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!isCreatingNewNotebook)
-                        DropdownButton<String>(
-                          value: selectedNotebookId,
-                          isExpanded: true,
-                          hint: const Text('Select a Notebook'),
-                          items: [
-                            ...notebooks.map((n) => DropdownMenuItem(value: n.id, child: Text(n.title))).toList(),
-                            const DropdownMenuItem(value: 'create_new', child: Text('+ Create New Notebook...')),
-                          ],
-                          onChanged: (value) {
-                            if (value == 'create_new') {
-                              showCreateNotebookDialog();
-                            } else {
-                              setDialogState(() {
-                                selectedNotebookId = value;
-                              });
-                            }
-                          },
-                        ),
-                      const SizedBox(height: 20),
-                      TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Title')),
-                      const SizedBox(height: 16),
-                      TextField(controller: contentController, decoration: const InputDecoration(labelText: 'Content'), maxLines: 4),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                    ElevatedButton(
-                      onPressed: selectedNotebookId == null ? null : saveEntry,
-                      child: const Text('Save'),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
     );
   }
 
@@ -332,14 +286,62 @@ class _HomeContentState extends State<HomeContent> {
             // --- HEADER ---
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('YouMii', style: theme.textTheme.headlineSmall!.copyWith(color: theme.primaryColor)),
-              CircleAvatar(
-                backgroundColor: Colors.white,
-                child: IconButton(icon: Icon(Icons.person, color: theme.primaryColor), onPressed: () {}),
-              ),
+              // Removed profile icon
             ]),
+
             const SizedBox(height: 24),
+
             Text('Hello, $displayName', style: theme.textTheme.headlineLarge),
-            const SizedBox(height: 24),
+
+            const SizedBox(height: 16),
+
+            // --- STREAK BADGE (Safety check to ensure 1 is min) ---
+            if (!_isLoadingStreak)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.elasticOut,
+                  builder: (context, scale, child) {
+                    return Transform.scale(
+                      scale: scale,
+                      child: child,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          _streakCount >= 3 ? 'assets/icons/capy_2.png' : 'assets/icons/capy_1.png',
+                          width: 24,
+                          height: 24,
+                          errorBuilder: (c, e, s) => const Icon(Icons.local_fire_department, color: Colors.orange), // Fallback
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          // FORCE DISPLAY '1' IF 0
+                            '${_streakCount < 1 ? 1 : _streakCount} Day Streak',
+                            style: TextStyle(
+                                color: _streakCount >= 3 ? Colors.orange.shade800 : Colors.grey.shade700,
+                                fontWeight: FontWeight.bold
+                            )
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            // --------------------------
+
+            const SizedBox(height: 20),
 
             // --- 1. DAILY QUOTE ---
             FutureBuilder<Quote>(
@@ -347,7 +349,7 @@ class _HomeContentState extends State<HomeContent> {
                 builder: (context, quoteSnapshot) {
                   if (quoteSnapshot.connectionState == ConnectionState.waiting) return const Center(child: LinearProgressIndicator());
                   final dailyQuote = quoteSnapshot.data ?? Quote(text: "Loading...", author: "");
-                  return _DailyQuoteCard(quote: dailyQuote, onJournalTap: () => _showJournalPromptDialog(dailyQuote));
+                  return _DailyQuoteCard(quote: dailyQuote, onJournalTap: () {});
                 }),
 
             const SizedBox(height: 20),
@@ -402,18 +404,7 @@ class _DailyQuoteCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text('"${quote.text}"', style: theme.textTheme.titleMedium!.copyWith(height: 1.5)),
             const SizedBox(height: 12),
-            Align(alignment: Alignment.centerRight, child: Text('- ${quote.author}', style: theme.textTheme.bodySmall)),
-            const SizedBox(height: 16),
-            const Divider(color: Colors.black12),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onJournalTap,
-                icon: Icon(Icons.book_outlined, color: theme.primaryColor),
-                label: Text('Journal this', style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
-              ),
-            ),
+            Align(alignment: Alignment.centerRight, child: Text('- ${quote.author}', style: theme.textTheme.bodySmall!.copyWith(color: Colors.black54))),
           ],
         ),
       ),
@@ -426,101 +417,41 @@ class _MoodLogCard extends StatelessWidget {
   final Function(MoodItem) onMoodSelected;
   final VoidCallback onReset;
   const _MoodLogCard({required this.selectedMood, required this.onMoodSelected, required this.onReset});
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Color for the "Summary" state (When mood is already logged) - Kept Lavender/Periwinkle
     const summaryCardColor = Color(0xFFCCCCFF);
+    final inputCardColor = const Color(0xFFFFF8E1);
 
-    // --- FIX: NEW COLOR FOR INPUT STATE ---
-
-    const inputCardColor = Color(0xffFFAE25);
-    // -------------------------------------
-
-    // --- STATE 1: MOOD LOGGED (SUMMARY VIEW) ---
     if (selectedMood != null) {
       return Card(
-        elevation: 2.0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        color: summaryCardColor,
+        elevation: 2.0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), color: summaryCardColor,
         child: InkWell(
-          onTap: onReset,
-          borderRadius: BorderRadius.circular(15),
+          onTap: onReset, borderRadius: BorderRadius.circular(15),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(color: selectedMood!.color, width: 2),
-                  ),
-                  child: Text(selectedMood!.emoji, style: const TextStyle(fontSize: 32)),
-                ),
+                Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: selectedMood!.color, width: 2)), child: Text(selectedMood!.emoji, style: const TextStyle(fontSize: 32))),
                 const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Mood Logged', style: theme.textTheme.bodySmall!.copyWith(color: Colors.grey[700])),
-                      Text(selectedMood!.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-                Icon(Icons.edit, color: theme.primaryColor),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Mood Logged', style: theme.textTheme.bodySmall!.copyWith(color: Colors.grey[700])), Text(selectedMood!.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))])),
+                Icon(Icons.edit, color: theme.primaryColor, size: 22),
               ],
             ),
           ),
         ),
       );
     }
-
-    // --- STATE 2: INPUT VIEW (Your Screenshot) ---
     return Card(
-      elevation: 4.0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      color: inputCardColor, // <--- APPLIED THE NEW YELLOW COLOR HERE
+      elevation: 4.0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), color: inputCardColor,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-                'How do you feel today?',
-                style: theme.textTheme.titleMedium!.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.brown.shade700 // Changed text to brown for better contrast on yellow
-                )
-            ),
+            Text('How do you feel today?', style: theme.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold, color: Colors.brown.shade700)),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: MoodItem.allMoods.map((mood) {
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                    child: InkWell(
-                      onTap: () => onMoodSelected(mood),
-                      borderRadius: BorderRadius.circular(30),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white, // White background behind emojis to make them pop
-                          border: Border.all(color: Colors.orange.withOpacity(0.1), width: 1),
-                        ),
-                        child: Text(mood.emoji, style: const TextStyle(fontSize: 32)),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: MoodItem.allMoods.map((mood) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2.0), child: InkWell(onTap: () => onMoodSelected(mood), borderRadius: BorderRadius.circular(30), child: Container(padding: const EdgeInsets.symmetric(vertical: 4.0), alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: Colors.orange.withOpacity(0.1), width: 1)), child: Text(mood.emoji, style: const TextStyle(fontSize: 32))))))).toList()),
           ],
         ),
       ),
@@ -546,9 +477,13 @@ class _DailyProgressStrip extends StatelessWidget {
             child: InkWell(
               onTap: () {
                 Widget? sessionScreen;
-                if (activity.title == 'Yoga') sessionScreen = const YogaSelection();
-                else if (activity.title == 'Breathing') sessionScreen = BreathingSession(activity: activity);
-                else if (activity.title == 'Meditation') sessionScreen = const MeditationSelectionScreen();
+                if (activity.title == 'Yoga') {
+                  sessionScreen = const YogaSelection();
+                } else if (activity.title == 'Breathing') {
+                  sessionScreen = BreathingSession(activity: activity);
+                } else if (activity.title == 'Meditation') {
+                  sessionScreen = const MeditationSelectionScreen();
+                }
 
                 if (sessionScreen != null) { Navigator.push(context, MaterialPageRoute(builder: (context) => sessionScreen!)); }
                 else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${activity.title} session is coming soon!'))); }
@@ -582,30 +517,97 @@ class _DailyProgressStrip extends StatelessWidget {
   }
 }
 
-class _DailyTasksCard extends StatelessWidget {
+class _DailyTasksCard extends StatefulWidget {
   final List<String> tasks;
   final bool isLoading;
   final Color cardColor;
-  const _DailyTasksCard({required this.tasks, required this.isLoading, required this.cardColor});
+
+  const _DailyTasksCard({
+    required this.tasks,
+    required this.isLoading,
+    required this.cardColor,
+    super.key,
+  });
+
+  @override
+  State<_DailyTasksCard> createState() => _DailyTasksCardState();
+}
+
+class _DailyTasksCardState extends State<_DailyTasksCard> {
+  late List<bool> _taskStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _taskStatus = List.generate(widget.tasks.length, (index) => false);
+  }
+
+  @override
+  void didUpdateWidget(_DailyTasksCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tasks.length != oldWidget.tasks.length) {
+      _taskStatus = List.generate(widget.tasks.length, (index) => false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
+    if (widget.isLoading) {
+      return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
+    }
+
     return Card(
-      color: cardColor.withOpacity(0.25),
+      color: widget.cardColor.withOpacity(0.25),
       elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Icons.eco, color: cardColor),
+              Icon(Icons.eco, color: widget.cardColor),
               const SizedBox(width: 8),
               const Text("Daily Plan", style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold))
             ]),
             const SizedBox(height: 12),
-            ...tasks.map((task) => Padding(padding: const EdgeInsets.symmetric(vertical: 6.0), child: Row(children: [Icon(Icons.check_circle_outline, size: 20, color: cardColor), const SizedBox(width: 12), Expanded(child: Text(task, style: const TextStyle(fontSize: 15, color: Colors.black87)))]))).toList()
+
+            ...List.generate(widget.tasks.length, (index) {
+              final task = widget.tasks[index];
+              final isChecked = _taskStatus.length > index ? _taskStatus[index] : false;
+
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _taskStatus[index] = !isChecked;
+                  });
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          task,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: isChecked ? Colors.grey : Colors.black87,
+                            decoration: isChecked ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(
+                        isChecked ? Icons.check_circle : Icons.circle_outlined,
+                        size: 24,
+                        color: isChecked ? widget.cardColor : Colors.grey,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ],
         ),
       ),

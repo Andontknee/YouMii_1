@@ -4,88 +4,75 @@ import 'package:flutter/material.dart';
 
 class MeditationType {
   final String title;
-  final String subtitle; // The PERMA connection
+  final String subtitle;
   final IconData icon;
   final Color color;
-  final List<String> guideScripts; // The text that will cycle on screen
+  final List<String> steps; // The step-by-step instructions
 
   MeditationType({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.color,
-    required this.guideScripts,
+    required this.steps,
   });
 
-  // The 4 PERMA-based Meditation Types
   static List<MeditationType> get allTypes => [
-    // 1. Engagement/Flow
+    // 1. Mindfulness of Breath
     MeditationType(
-      title: 'Deep Focus',
-      subtitle: 'Engagement & Mindfulness',
-      icon: Icons.center_focus_strong,
-      color: Colors.teal,
-      guideScripts: [
-        "Find a comfortable seated position. Rest your hands on your knees.",
-        "Close your eyes. Take a deep breath in... and let it go.",
-        "Bring your full attention to the sensation of breathing.",
-        "Notice the cool air entering your nose...",
-        "And the warm air leaving your body.",
-        "If your mind wanders, gently bring it back to the breath.",
-        "You are exactly where you need to be.",
-        "Focus...",
+      title: 'Mindfulness of Breath',
+      subtitle: 'Anxiety & Focus',
+      icon: Icons.air,
+      color: Colors.lightBlueAccent,
+      steps: [
+        "Sit or lie down comfortably. Relax your shoulders.",
+        "Close your eyes or soften your gaze.",
+        "Bring your attention to your natural breathing. Do not try to control it.",
+        "Notice the air entering your nose, and your chest rising.",
+        "If thoughts appear, acknowledge them without judgment.",
+        "Gently return your attention to your breath.",
+        "Continue noticing the rhythm of your inhale and exhale.",
         "Stay with the breath.",
+        "Slowly bring your awareness back to the room. Open your eyes.",
       ],
     ),
-    // 2. Positive Emotion/Gratitude
+    // 2. Body Scan
     MeditationType(
-      title: 'Gratitude',
-      subtitle: 'Positive Emotion & Joy',
-      icon: Icons.favorite,
-      color: Colors.pinkAccent,
-      guideScripts: [
-        "Sit comfortably and relax your shoulders.",
-        "Take a slow, deep breath. Smile gently.",
-        "Bring to mind one thing you are grateful for today.",
-        "It could be a person, a place, or a small comfort.",
-        "Visualize this thing clearly in your mind.",
-        "Notice how it makes you feel. Warm? Light? Happy?",
-        "Let that feeling of gratitude expand in your chest.",
-        "Silently say: 'Thank you.'",
+      title: 'Body Scan',
+      subtitle: 'Stress & Sleep',
+      icon: Icons.accessibility_new,
+      color: Colors.indigoAccent,
+      steps: [
+        "Lie down or sit comfortably. Take a few slow breaths.",
+        "Bring your attention to your feet. Notice any warmth or tension.",
+        "Slowly move your attention up to your calves and thighs.",
+        "Notice your abdomen, chest, and shoulders. Let them relax.",
+        "Move your attention down your arms to your hands.",
+        "Bring focus to your neck, face, and head. Soften your jaw.",
+        "Observe your whole body resting here.",
+        "If your mind wanders, gently return to the current body area.",
+        "Feel the weight of your body relaxing completely.",
+        "When ready, gently wiggle your fingers and toes.",
       ],
     ),
-    // 3. Relationships/Kindness
+    // 3. Loving-Kindness
     MeditationType(
-      title: 'Loving Kindness',
-      subtitle: 'Relationships & Connection',
+      title: 'Loving-Kindness',
+      subtitle: 'Self-Compassion & Healing',
       icon: Icons.volunteer_activism,
-      color: Colors.orange,
-      guideScripts: [
-        "Settle into stillness. Soften your face and jaw.",
-        "Bring to mind someone you love deeply.",
-        "Wish them well silently: 'May you be happy.'",
-        "Now, think of yourself. You deserve kindness too.",
-        "Say to yourself: 'May I be safe. May I be peaceful.'",
-        "Think of an acquaintance or stranger.",
-        "Send them a thought of goodwill.",
-        "We are all connected. Breathe in that connection.",
-      ],
-    ),
-    // 4. Meaning/Purpose
-    MeditationType(
-      title: 'Inner Purpose',
-      subtitle: 'Meaning & Values',
-      icon: Icons.lightbulb,
-      color: Colors.indigo,
-      guideScripts: [
-        "Find your center. Breathe deeply into your belly.",
-        "Ask yourself: What truly matters to me right now?",
-        "Don't search for the answer. Just let it come.",
-        "Visualize your best future self.",
-        "What value are you bringing to the world?",
-        "Feel the strength of your purpose grounding you.",
-        "You are capable. You are driven.",
-        "Carry this intention with you.",
+      color: Colors.pinkAccent,
+      steps: [
+        "Sit comfortably and close your eyes.",
+        "Bring your attention to your heart center.",
+        "Silently repeat: 'May I be safe.'",
+        "Repeat: 'May I be calm.'",
+        "Repeat: 'May I be kind to myself.'",
+        "Repeat: 'May I be at peace.'",
+        "Let any feelings arise naturally. It is okay to feel neutral.",
+        "Now, extend this wish to someone you care about.",
+        "Extend this wish to someone neutral, or even difficult.",
+        "Return the focus to yourself. 'May I be happy.'",
+        "Take a deep breath and open your eyes.",
       ],
     ),
   ];

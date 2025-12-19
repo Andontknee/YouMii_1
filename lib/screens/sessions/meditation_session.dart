@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter_tts/flutter_tts.dart'; // Ensure flutter_tts is in pubspec.yaml
 import '../../models/meditation_model.dart';
 
 class MeditationSessionScreen extends StatefulWidget {
@@ -15,67 +16,104 @@ class MeditationSessionScreen extends StatefulWidget {
 }
 
 class _MeditationSessionScreenState extends State<MeditationSessionScreen> {
-  Timer? _mainTimer;
-  Timer? _scriptTimer;
+  // TTS
+  final FlutterTts _flutterTts = FlutterTts();
+  bool _isMuted = false;
 
+  // Timers
+  Timer? _mainTimer;
+  Timer? _stepTimer;
+
+  // State
   int _secondsRemaining = 0;
-  int _totalSeconds = 0;
-  int _currentScriptIndex = 0;
+  int _currentStepIndex = 0;
   bool _isPaused = false;
   bool _isFinished = false;
 
   @override
   void initState() {
     super.initState();
-    _totalSeconds = widget.minutes * 60;
-    _secondsRemaining = _totalSeconds;
+    _secondsRemaining = widget.minutes * 60;
+    _initTts();
     _startSession();
   }
 
+  void _initTts() async {
+    await _flutterTts.setLanguage("en-US");
+    await _flutterTts.setPitch(1.0);
+    await _flutterTts.setSpeechRate(0.4); // Slow, calming speed
+  }
+
+  void _speak(String text) async {
+    if (!_isMuted && mounted) {
+      await _flutterTts.speak(text);
+    }
+  }
+
   void _startSession() {
-    // 1. Main Countdown Timer
+    // 1. Calculate duration per step
+    // We divide total time by number of steps to pace it perfectly
+    int stepDuration = (_secondsRemaining / widget.type.steps.length).floor();
+    if (stepDuration < 5) stepDuration = 5; // Minimum 5 seconds per step
+
+    // Speak first step immediately
+    _speak(widget.type.steps[0]);
+
+    // 2. Main Countdown Timer (Updates UI every second)
     _mainTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_isPaused) return;
 
-      setState(() {
-        if (_secondsRemaining > 0) {
-          _secondsRemaining--;
-        } else {
-          _finishSession();
-        }
-      });
+      if (mounted) {
+        setState(() {
+          if (_secondsRemaining > 0) {
+            _secondsRemaining--;
+          } else {
+            _finishSession();
+          }
+        });
+      }
     });
 
-    // 2. Script Cycling Timer
-    // Calculate how long to show each line based on total duration
-    // We keep the text changing slowly to be relaxing.
-    // Minimum 10 seconds per line, or distribute evenly if long session.
-    int scriptInterval = (_totalSeconds / widget.type.guideScripts.length).floor();
-    if (scriptInterval < 8) scriptInterval = 8; // Minimum read time
-
-    _scriptTimer = Timer.periodic(Duration(seconds: scriptInterval), (timer) {
+    // 3. Step Progression Timer (Moves to next instruction)
+    _stepTimer = Timer.periodic(Duration(seconds: stepDuration), (timer) {
       if (_isPaused) return;
 
-      setState(() {
-        // Loop through scripts, but stop at the last one
-        if (_currentScriptIndex < widget.type.guideScripts.length - 1) {
-          _currentScriptIndex++;
+      if (_currentStepIndex < widget.type.steps.length - 1) {
+        if (mounted) {
+          setState(() {
+            _currentStepIndex++;
+          });
+          // Speak the new step
+          _speak(widget.type.steps[_currentStepIndex]);
         }
-      });
+      }
     });
   }
 
   void _finishSession() {
     _mainTimer?.cancel();
-    _scriptTimer?.cancel();
-    setState(() {
-      _isFinished = true;
-    });
+    _stepTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _isFinished = true;
+      });
+      _speak("Session complete. Have a wonderful day.");
+    }
   }
 
   void _togglePause() {
     setState(() {
       _isPaused = !_isPaused;
+      if (_isPaused) {
+        _flutterTts.stop();
+      }
+    });
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+      if (_isMuted) _flutterTts.stop();
     });
   }
 
@@ -88,105 +126,118 @@ class _MeditationSessionScreenState extends State<MeditationSessionScreen> {
   @override
   void dispose() {
     _mainTimer?.cancel();
-    _scriptTimer?.cancel();
+    _stepTimer?.cancel();
+    _flutterTts.stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Using a soft gradient based on the meditation color
     return Scaffold(
-      // Dark, immersive background using the meditation type's color theme but very dark
-      backgroundColor: Color.lerp(Colors.black, widget.type.color, 0.1),
-      body: SafeArea(
-        child: _isFinished ? _buildFinishedView() : _buildActiveView(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              widget.type.color.withOpacity(0.3), // Soft top
+              const Color(0xFFF0F4F8), // Fade to white/grey
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: _isFinished ? _buildFinishedView() : _buildActiveView(),
+        ),
       ),
     );
   }
 
   Widget _buildActiveView() {
-    return Stack(
-      children: [
-        // 1. Ambient Background Glow (Optional, centered circle)
-        Center(
-          child: Container(
-            width: 300,
-            height: 300,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: widget.type.color.withOpacity(0.1),
-                  blurRadius: 100,
-                  spreadRadius: 50,
-                )
-              ],
-            ),
-          ),
-        ),
-
-        // 2. Main Content
-        Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Spacer(),
-
-              // The Guided Text (Animated Switcher for smooth fade)
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 1500),
-                child: Text(
-                  widget.type.guideScripts[_currentScriptIndex],
-                  key: ValueKey<int>(_currentScriptIndex), // Key ensures animation triggers
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w300,
-                    height: 1.4,
-                  ),
-                ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.grey),
+                onPressed: () => Navigator.pop(context),
               ),
-
-              const Spacer(),
-
-              // Timer Display
-              Text(
-                _formatTime(_secondsRemaining),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 18,
-                  letterSpacing: 1.5,
-                ),
+              Text(widget.type.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              IconButton(
+                icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up, color: Colors.grey),
+                onPressed: _toggleMute,
               ),
-
-              const SizedBox(height: 40),
-
-              // Controls
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  IconButton(
-                    icon: Icon(_isPaused ? Icons.play_circle_filled : Icons.pause_circle_filled,
-                        size: 60, color: Colors.white),
-                    onPressed: _togglePause,
-                  ),
-                  // Placeholder for music button (disabled for now)
-                  const IconButton(
-                    icon: Icon(Icons.music_note, color: Colors.white24),
-                    onPressed: null,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
             ],
           ),
-        ),
-      ],
+
+          const Spacer(flex: 1),
+
+          // Central Visual
+          Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: widget.type.color.withOpacity(0.2), blurRadius: 40, spreadRadius: 10)
+              ],
+            ),
+            child: Icon(widget.type.icon, size: 80, color: widget.type.color),
+          ),
+
+          const SizedBox(height: 40),
+
+          // Instruction Text (Animated)
+          SizedBox(
+            height: 120,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 800),
+              child: Text(
+                widget.type.steps[_currentStepIndex],
+                key: ValueKey<int>(_currentStepIndex),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w500,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ),
+
+          const Spacer(flex: 1),
+
+          // Timer
+          Text(
+            _formatTime(_secondsRemaining),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 24,
+              fontWeight: FontWeight.w300,
+              letterSpacing: 2.0,
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          // Play/Pause
+          FloatingActionButton(
+            onPressed: _togglePause,
+            backgroundColor: widget.type.color,
+            foregroundColor: Colors.white,
+            elevation: 4,
+            child: Icon(_isPaused ? Icons.play_arrow : Icons.pause, size: 32),
+          ),
+
+          const SizedBox(height: 20),
+        ],
+      ),
     );
   }
 
@@ -197,15 +248,15 @@ class _MeditationSessionScreenState extends State<MeditationSessionScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(widget.type.icon, size: 80, color: widget.type.color),
+            Icon(Icons.check_circle_outline, size: 100, color: widget.type.color),
             const SizedBox(height: 24),
             const Text(
               "Session Complete",
-              style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.black87, fontSize: 28, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             const Text(
-              "You have taken a moment for yourself.",
+              "Take this sense of calm with you into the rest of your day.",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey, fontSize: 16),
             ),
