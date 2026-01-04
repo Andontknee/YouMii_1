@@ -38,8 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // No need to navigate manually. The AuthGate in main.dart will see the user update
-      // and automatically switch to HomeScreen.
+      // AuthGate handles navigation automatically
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         setState(() {
@@ -55,6 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // --- FIX IS HERE ---
   Future<void> _handleGoogleLogin() async {
     if (!mounted) return;
     setState(() {
@@ -64,9 +64,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+
+      // 1. FORCE ACCOUNT SELECTION:
+      // We sign out of the Google Plugin specifically to clear the "remembered" account.
+      try {
+        await googleSignIn.signOut();
+      } catch (_) {
+        // Ignore errors here, just ensuring state is clean
+      }
+
+      // 2. Now trigger the Sign In dialog
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
       if (googleUser == null) {
+        // User canceled the sign-in flow
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -99,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // Use the Lavender Mist background
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -108,20 +119,18 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                // --- Logo / Icon Placeholder ---
                 // --- MASCOT IMAGE ---
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.all(8), // Reduced padding slightly
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: theme.primaryColor.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    // Use the asset image instead of the Icon
                     child: ClipOval(
                       child: Image.asset(
                         'assets/mascot.png',
-                        height: 100, // Adjust size as needed
+                        height: 100,
                         width: 100,
                         fit: BoxFit.cover,
                       ),
@@ -141,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 48.0),
 
-                // --- Inputs (Theme handles the decoration) ---
+                // --- Inputs ---
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -198,7 +207,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Text now uses primary color
                       Text('Login with Google', style: TextStyle(fontSize: 16, color: theme.primaryColor, fontWeight: FontWeight.bold)),
                     ],
                   ),

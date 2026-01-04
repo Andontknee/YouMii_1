@@ -1,6 +1,7 @@
 // lib/screens/home/home_screen.dart
 
 import 'package:flutter/material.dart';
+// Note: We are importing individual classes from dashboard_screen if they are in the same file
 import 'dashboard_screen.dart';
 import 'notebooks_screen.dart';
 import 'profile_screen.dart';
@@ -11,7 +12,6 @@ import '/services/quote_service.dart';
 import '/models/activity_model.dart';
 import '/services/journal_service.dart';
 import '/models/journal_model.dart';
-import '/models/wellness_tasks_data.dart';
 import '/models/wellness_tasks_data.dart';
 import 'journal_entry_screen.dart';
 import '../sessions/breathing_session.dart';
@@ -24,9 +24,7 @@ class MoodItem {
   final String emoji;
   final String label;
   final Color color;
-
   MoodItem(this.emoji, this.label, this.color);
-
   static final List<MoodItem> allMoods = [
     MoodItem('😀', 'Fantastic', Colors.green),
     MoodItem('😌', 'Calm', Colors.teal),
@@ -35,7 +33,7 @@ class MoodItem {
     MoodItem('😡', 'Angry', Colors.deepPurple),
   ];
 }
-// --- END MOOD LOG DATA STRUCTURE ---
+// ---------------------------------
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -45,20 +43,33 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+
+  // --- THE 5 MAIN TABS ---
   static final List<Widget> _widgetOptions = <Widget>[
-    const HomeContent(),
-    const JournalHubScreen(),
-    const DashboardScreen(),
-    const ProfileScreen(),
+    const HomeContent(),        // 0: Home
+    const JournalHubScreen(),   // 1: Journal & Calendar
+    const SupportScreen(),      // 2: Support (Emergency/Events/Contacts) - From dashboard_screen.dart
+    const ReadingScreen(),      // 3: Articles - From dashboard_screen.dart
+    const ProfileScreen(),      // 4: Profile
   ];
-  void _onItemTapped(int index) { setState(() { _selectedIndex = index; }); }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+
+      // Dynamic Body
       body: Center(child: _widgetOptions.elementAt(_selectedIndex)),
+
+      // Chatbot Button (Bottom Right)
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(context,
             MaterialPageRoute(builder: (context) => const ChatbotScreen())),
@@ -66,25 +77,37 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         elevation: 4.0,
         shape: const CircleBorder(),
-        child: const Icon(Icons.hub_outlined, size: 30),
+        // CHANGE IS HERE: Use Image.asset instead of Icon
+        child: Padding(
+          padding: const EdgeInsets.all(1.0), // Adds padding so the image isn't too close to the edge
+          child: Image.asset(
+            'assets/mascot.png', // Make sure this path matches your mascot file
+            fit: BoxFit.contain,
+          ),
+        ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
+      // --- NAVIGATION BAR ---
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
-        notchMargin: 10.0,
-        color: Colors.white,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: <Widget>[
-              _buildNavItem(icon: Icons.home_rounded, index: 0, label: 'Home'),
-              _buildNavItem(icon: Icons.book_rounded, index: 1, label: 'Journal'),
-              const SizedBox(width: 40),
-              _buildNavItem(icon: Icons.grid_view_rounded, index: 2, label: 'Resources'),
-              _buildNavItem(icon: Icons.person_rounded, index: 3, label: 'Profile'),
-            ],
-          ),
+        notchMargin: 6.0, // Reduced slightly
+        color: Colors.white, // FIX: Force White Background
+        surfaceTintColor: Colors.white, // FIX: Remove Material 3 purple tint
+        elevation: 10.0,
+        height: 70, // Height for 5 icons
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Use SpaceEvenly for 5 items
+          children: <Widget>[
+            _buildNavItem(icon: Icons.home_rounded, index: 0, label: 'Home'),
+            _buildNavItem(icon: Icons.book_rounded, index: 1, label: 'Journal'),
+            // Separate Tabs
+            _buildNavItem(icon: Icons.people_alt_rounded, index: 2, label: 'Support'),
+            _buildNavItem(icon: Icons.menu_book_rounded, index: 3, label: 'Read'),
+
+            _buildNavItem(icon: Icons.person_rounded, index: 4, label: 'Profile'),
+          ],
         ),
       ),
     );
@@ -95,13 +118,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return IconButton(
       icon: Icon(icon,
           color: isSelected ? Theme.of(context).primaryColor : Colors.grey[400],
-          size: 28),
+          size: 26),
       onPressed: () => _onItemTapped(index),
       tooltip: label,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
     );
   }
 }
 
+// --- HOME CONTENT TAB ---
 class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
   @override
@@ -118,72 +144,12 @@ class _HomeContentState extends State<HomeContent> {
   List<String> _aiTasks = [];
   bool _isLoadingTasks = true;
 
-  // Streak State
-  int _streakCount = 0;
-  bool _isLoadingStreak = true;
-
   @override
   void initState() {
     super.initState();
     _fetchQuote();
     _checkTodayMood();
     _fetchDailyTasks();
-    _updateLoginStreak();
-  }
-
-  // --- UPDATED & ROBUST STREAK LOGIC ---
-  Future<void> _updateLoginStreak() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-    final today = DateTime.now();
-    final todayStr = today.toIso8601String().substring(0, 10);
-
-    final yesterday = today.subtract(const Duration(days: 1));
-    final yesterdayStr = yesterday.toIso8601String().substring(0, 10);
-
-    try {
-      final docSnapshot = await userDocRef.get();
-      int newStreak = 0;
-
-      if (docSnapshot.exists && docSnapshot.data() != null) {
-        final data = docSnapshot.data() as Map<String, dynamic>;
-        final lastLoginDate = data['lastLoginDate'] as String? ?? '';
-        final currentStreak = data['currentStreak'] as int? ?? 0;
-
-        if (lastLoginDate == todayStr) {
-          // Already logged in today.
-          // FIX: Ensure it is at least 1
-          newStreak = (currentStreak > 0) ? currentStreak : 1;
-        } else if (lastLoginDate == yesterdayStr) {
-          // Logged in yesterday, increment!
-          newStreak = currentStreak + 1;
-        } else {
-          // Streak broken or older than yesterday, reset to 1
-          newStreak = 1;
-        }
-      } else {
-        // First time user, start at 1
-        newStreak = 1;
-      }
-
-      // Update Database and UI
-      // We perform a merge set to handle both new and existing docs safely
-      await userDocRef.set({
-        'lastLoginDate': todayStr,
-        'currentStreak': newStreak,
-      }, SetOptions(merge: true));
-
-      if (mounted) setState(() => _streakCount = newStreak);
-
-    } catch (e) {
-      print("Streak Error: $e");
-      // Even on error, show 1 locally for good UX
-      if (mounted) setState(() => _streakCount = 1);
-    } finally {
-      if (mounted) setState(() => _isLoadingStreak = false);
-    }
   }
 
   void _fetchQuote() {
@@ -237,6 +203,7 @@ class _HomeContentState extends State<HomeContent> {
     } catch (e) { print("Firebase Mood Log Error: $e"); }
   }
 
+  // DIALOG FOR MOOD NOTES
   void _showMoodNoteDialog(MoodItem mood) {
     final noteController = TextEditingController();
     showDialog(
@@ -250,17 +217,7 @@ class _HomeContentState extends State<HomeContent> {
           children: [
             const Text('Add a short note about your day (optional):'),
             const SizedBox(height: 16),
-            TextField(
-              controller: noteController,
-              maxLength: 120,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: 'Why do you feel this way?',
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-            ),
+            TextField(controller: noteController, maxLength: 120, maxLines: 3, decoration: const InputDecoration(hintText: 'Why do you feel this way?', border: OutlineInputBorder(), filled: true, fillColor: Colors.white)),
           ],
         ),
         actions: [
@@ -270,6 +227,8 @@ class _HomeContentState extends State<HomeContent> {
       ),
     );
   }
+
+  // NOTE: Daily Quote doesn't open a journal dialog anymore (requested removal)
 
   @override
   Widget build(BuildContext context) {
@@ -283,65 +242,13 @@ class _HomeContentState extends State<HomeContent> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
           children: [
-            // --- HEADER ---
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('YouMii', style: theme.textTheme.headlineSmall!.copyWith(color: theme.primaryColor)),
-              // Removed profile icon
+              // Profile pic removed here
             ]),
-
             const SizedBox(height: 24),
-
             Text('Hello, $displayName', style: theme.textTheme.headlineLarge),
-
-            const SizedBox(height: 16),
-
-            // --- STREAK BADGE (Safety check to ensure 1 is min) ---
-            if (!_isLoadingStreak)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0.0, end: 1.0),
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.elasticOut,
-                  builder: (context, scale, child) {
-                    return Transform.scale(
-                      scale: scale,
-                      child: child,
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Image.asset(
-                          _streakCount >= 3 ? 'assets/icons/capy_2.png' : 'assets/icons/capy_1.png',
-                          width: 24,
-                          height: 24,
-                          errorBuilder: (c, e, s) => const Icon(Icons.local_fire_department, color: Colors.orange), // Fallback
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          // FORCE DISPLAY '1' IF 0
-                            '${_streakCount < 1 ? 1 : _streakCount} Day Streak',
-                            style: TextStyle(
-                                color: _streakCount >= 3 ? Colors.orange.shade800 : Colors.grey.shade700,
-                                fontWeight: FontWeight.bold
-                            )
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            // --------------------------
-
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // --- 1. DAILY QUOTE ---
             FutureBuilder<Quote>(
@@ -349,7 +256,7 @@ class _HomeContentState extends State<HomeContent> {
                 builder: (context, quoteSnapshot) {
                   if (quoteSnapshot.connectionState == ConnectionState.waiting) return const Center(child: LinearProgressIndicator());
                   final dailyQuote = quoteSnapshot.data ?? Quote(text: "Loading...", author: "");
-                  return _DailyQuoteCard(quote: dailyQuote, onJournalTap: () {});
+                  return _DailyQuoteCard(quote: dailyQuote);
                 }),
 
             const SizedBox(height: 20),
@@ -363,15 +270,14 @@ class _HomeContentState extends State<HomeContent> {
 
             const SizedBox(height: 30),
 
-            // --- 3. ACTIVITIES & PLANS ---
+            // --- 3. ACTIVITIES ---
             Padding(padding: const EdgeInsets.only(left: 4.0, bottom: 12.0), child: Text('Wellness Tools', style: theme.textTheme.titleLarge)),
-
             _DailyProgressStrip(activities: _dailyActivities, cardColor: const Color(0xFFE0F2F1)),
 
             const SizedBox(height: 20),
 
+            // --- 4. DAILY PLAN (CHECKBOXES) ---
             _DailyTasksCard(tasks: _aiTasks, isLoading: _isLoadingTasks, cardColor: const Color(0xFFA4A5F5)),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -384,27 +290,25 @@ class _HomeContentState extends State<HomeContent> {
 
 class _DailyQuoteCard extends StatelessWidget {
   final Quote quote;
-  final VoidCallback onJournalTap;
-  const _DailyQuoteCard({required this.quote, required this.onJournalTap});
+  const _DailyQuoteCard({required this.quote});
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Card(
-      color: const Color(0xFF9EF0FF),
+      color: const Color(0xFF9EF0FF), // Cyan
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Icon(Icons.format_quote_rounded, color: Colors.blue.shade700, size: 24),
-              const SizedBox(width: 8),
-              Text('Quote of the Day', style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
+            const Row(children: [
+              Icon(Icons.format_quote_rounded, color: Colors.blueAccent, size: 24),
+              SizedBox(width: 8),
+              Text('Quote of the Day', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
             ]),
             const SizedBox(height: 12),
-            Text('"${quote.text}"', style: theme.textTheme.titleMedium!.copyWith(height: 1.5)),
+            Text('"${quote.text}"', style: Theme.of(context).textTheme.titleMedium!.copyWith(height: 1.5)),
             const SizedBox(height: 12),
-            Align(alignment: Alignment.centerRight, child: Text('- ${quote.author}', style: theme.textTheme.bodySmall!.copyWith(color: Colors.black54))),
+            Align(alignment: Alignment.centerRight, child: Text('- ${quote.author}', style: Theme.of(context).textTheme.bodySmall!.copyWith(color: Colors.black54))),
           ],
         ),
       ),
@@ -417,41 +321,45 @@ class _MoodLogCard extends StatelessWidget {
   final Function(MoodItem) onMoodSelected;
   final VoidCallback onReset;
   const _MoodLogCard({required this.selectedMood, required this.onMoodSelected, required this.onReset});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const summaryCardColor = Color(0xFFCCCCFF);
-    final inputCardColor = const Color(0xFFFFF8E1);
+    const inputCardColor = Color(0xFFFFF9E6); // Light Peach/Yellow
 
+    // State 1: Summary (Already logged)
     if (selectedMood != null) {
       return Card(
-        elevation: 2.0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), color: summaryCardColor,
+        color: summaryCardColor,
         child: InkWell(
-          onTap: onReset, borderRadius: BorderRadius.circular(15),
+          onTap: onReset, borderRadius: BorderRadius.circular(24),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+            padding: const EdgeInsets.all(24.0),
             child: Row(
               children: [
                 Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: selectedMood!.color, width: 2)), child: Text(selectedMood!.emoji, style: const TextStyle(fontSize: 32))),
                 const SizedBox(width: 16),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Mood Logged', style: theme.textTheme.bodySmall!.copyWith(color: Colors.grey[700])), Text(selectedMood!.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))])),
-                Icon(Icons.edit, color: theme.primaryColor, size: 22),
+                Icon(Icons.edit, color: theme.primaryColor),
               ],
             ),
           ),
         ),
       );
     }
+
+    // State 2: Input (Select Emoji)
     return Card(
-      elevation: 4.0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)), color: inputCardColor,
+      color: inputCardColor,
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('How do you feel today?', style: theme.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold, color: Colors.brown.shade700)),
             const SizedBox(height: 20),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: MoodItem.allMoods.map((mood) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2.0), child: InkWell(onTap: () => onMoodSelected(mood), borderRadius: BorderRadius.circular(30), child: Container(padding: const EdgeInsets.symmetric(vertical: 4.0), alignment: Alignment.center, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: Colors.orange.withOpacity(0.1), width: 1)), child: Text(mood.emoji, style: const TextStyle(fontSize: 32))))))).toList()),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: MoodItem.allMoods.map((mood) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4.0), child: InkWell(onTap: () => onMoodSelected(mood), borderRadius: BorderRadius.circular(30), child: Container(padding: const EdgeInsets.symmetric(vertical: 8.0), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.orange.withOpacity(0.1), width: 1)), child: Text(mood.emoji, style: const TextStyle(fontSize: 28), textAlign: TextAlign.center)))))).toList()),
           ],
         ),
       ),
@@ -477,13 +385,9 @@ class _DailyProgressStrip extends StatelessWidget {
             child: InkWell(
               onTap: () {
                 Widget? sessionScreen;
-                if (activity.title == 'Yoga') {
-                  sessionScreen = const YogaSelection();
-                } else if (activity.title == 'Breathing') {
-                  sessionScreen = BreathingSession(activity: activity);
-                } else if (activity.title == 'Meditation') {
-                  sessionScreen = const MeditationSelectionScreen();
-                }
+                if (activity.title == 'Yoga') sessionScreen = const YogaSelection();
+                else if (activity.title == 'Breathing') sessionScreen = BreathingSession(activity: activity);
+                else if (activity.title == 'Meditation') sessionScreen = const MeditationSelectionScreen();
 
                 if (sessionScreen != null) { Navigator.push(context, MaterialPageRoute(builder: (context) => sessionScreen!)); }
                 else { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${activity.title} session is coming soon!'))); }
@@ -521,14 +425,7 @@ class _DailyTasksCard extends StatefulWidget {
   final List<String> tasks;
   final bool isLoading;
   final Color cardColor;
-
-  const _DailyTasksCard({
-    required this.tasks,
-    required this.isLoading,
-    required this.cardColor,
-    super.key,
-  });
-
+  const _DailyTasksCard({required this.tasks, required this.isLoading, required this.cardColor});
   @override
   State<_DailyTasksCard> createState() => _DailyTasksCardState();
 }
@@ -552,14 +449,11 @@ class _DailyTasksCardState extends State<_DailyTasksCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isLoading) {
-      return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
-    }
+    if (widget.isLoading) return const SizedBox(height: 50, child: Center(child: CircularProgressIndicator()));
 
     return Card(
       color: widget.cardColor.withOpacity(0.25),
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -572,37 +466,20 @@ class _DailyTasksCardState extends State<_DailyTasksCard> {
             ]),
             const SizedBox(height: 12),
 
+            // Checkboxes logic
             ...List.generate(widget.tasks.length, (index) {
               final task = widget.tasks[index];
               final isChecked = _taskStatus.length > index ? _taskStatus[index] : false;
-
               return InkWell(
-                onTap: () {
-                  setState(() {
-                    _taskStatus[index] = !isChecked;
-                  });
-                },
+                onTap: () { setState(() { _taskStatus[index] = !isChecked; }); },
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          task,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: isChecked ? Colors.grey : Colors.black87,
-                            decoration: isChecked ? TextDecoration.lineThrough : null,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: Text(task, style: TextStyle(fontSize: 15, color: isChecked ? Colors.grey : Colors.black87, decoration: isChecked ? TextDecoration.lineThrough : null))),
                       const SizedBox(width: 12),
-                      Icon(
-                        isChecked ? Icons.check_circle : Icons.circle_outlined,
-                        size: 24,
-                        color: isChecked ? widget.cardColor : Colors.grey,
-                      ),
+                      Icon(isChecked ? Icons.check_circle : Icons.circle_outlined, size: 24, color: isChecked ? widget.cardColor : Colors.grey),
                     ],
                   ),
                 ),

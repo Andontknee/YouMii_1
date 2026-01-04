@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 
 import '../home/notebooks_screen.dart';
 import '../home/home_screen.dart'; // To access MoodItem class
+// --- IMPORT THE NEW CARD HERE ---
+import 'mood_insight_card.dart';
 
 // --- MOOD SERVICE ---
 class MoodService {
@@ -58,7 +60,6 @@ class JournalHubScreen extends StatelessWidget {
             labelColor: theme.primaryColor,
             unselectedLabelColor: Colors.grey,
             tabs: const [
-              // --- SWAPPED: Mood Calendar is now FIRST ---
               Tab(text: 'Mood Calendar', icon: Icon(Icons.calendar_month_outlined)),
               Tab(text: 'Notebooks', icon: Icon(Icons.book_outlined)),
             ],
@@ -66,7 +67,6 @@ class JournalHubScreen extends StatelessWidget {
         ),
         body: const TabBarView(
           children: [
-            // --- SWAPPED: MoodCalendarTab is now FIRST ---
             MoodCalendarTab(),
             NotebooksScreen(),
           ],
@@ -186,6 +186,7 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
 
     return Column(
       children: [
+        // 1. Navigation
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
@@ -216,6 +217,8 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
             ],
           ),
         ),
+
+        // 2. Weekday Labels
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 8.0),
           child: Row(
@@ -228,6 +231,8 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
             ],
           ),
         ),
+
+        // 3. The Grid View (Fills available space)
         _isLoading
             ? const Expanded(child: Center(child: CircularProgressIndicator()))
             : Expanded(
@@ -267,6 +272,12 @@ class _MoodCalendarTabState extends State<MoodCalendarTab> {
               );
             },
           ),
+        ),
+
+        // 4. --- ADDED: The AI Insight Card at the bottom ---
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 32),
+          child: MoodInsightCard(),
         ),
       ],
     );

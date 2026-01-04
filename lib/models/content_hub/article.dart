@@ -1,4 +1,4 @@
-// lib/models/content_hub/article.dart (FINAL, DEFINITIVE Structure)
+// lib/models/content_hub/article.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -9,7 +9,7 @@ class Article {
   final String category;
   final String imageUrl;
   final String fullContent;
-  final String sourceName; // --- THIS IS THE CRITICAL MISSING FIELD ---
+  final String sourceName;
 
   Article({
     required this.id,
@@ -17,7 +17,7 @@ class Article {
     required this.category,
     required this.imageUrl,
     required this.fullContent,
-    required this.sourceName, // --- MUST BE IN THE CONSTRUCTOR ---
+    required this.sourceName,
   });
 
   // Factory constructor to build the object from Firebase
@@ -28,9 +28,9 @@ class Article {
       id: doc.id,
       title: data['title'] ?? 'Title Missing',
       category: data['category'] ?? 'General',
-      imageUrl: data['imageUrl'] ?? 'NO_IMAGE',
+      imageUrl: (data['imageURL'] ?? '').toString().trim(),
       fullContent: data['full content'] ?? '## Content Missing in Firestore',
-      sourceName: data['sourceName'] ?? 'YouMii Curated Insights', // <-- MAPPING FROM FIRESTORE
+      sourceName: data['sourceName'] ?? 'YouMii Curated Insights',
     );
   }
 }

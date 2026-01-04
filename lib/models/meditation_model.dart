@@ -7,7 +7,8 @@ class MeditationType {
   final String subtitle;
   final IconData icon;
   final Color color;
-  final List<String> steps; // The step-by-step instructions
+  final List<String> steps;
+  final String imageAsset; // NEW FIELD
 
   MeditationType({
     required this.title,
@@ -15,6 +16,7 @@ class MeditationType {
     required this.icon,
     required this.color,
     required this.steps,
+    required this.imageAsset, // NEW REQUIRED
   });
 
   static List<MeditationType> get allTypes => [
@@ -24,6 +26,7 @@ class MeditationType {
       subtitle: 'Anxiety & Focus',
       icon: Icons.air,
       color: Colors.lightBlueAccent,
+      imageAsset: 'assets/meditation/breath.png', // Ensure this file exists!
       steps: [
         "Sit or lie down comfortably. Relax your shoulders.",
         "Close your eyes or soften your gaze.",
@@ -42,6 +45,7 @@ class MeditationType {
       subtitle: 'Stress & Sleep',
       icon: Icons.accessibility_new,
       color: Colors.indigoAccent,
+      imageAsset: 'assets/meditation/body_scan.png',
       steps: [
         "Lie down or sit comfortably. Take a few slow breaths.",
         "Bring your attention to your feet. Notice any warmth or tension.",
@@ -61,6 +65,7 @@ class MeditationType {
       subtitle: 'Self-Compassion & Healing',
       icon: Icons.volunteer_activism,
       color: Colors.pinkAccent,
+      imageAsset: 'assets/meditation/love.png',
       steps: [
         "Sit comfortably and close your eyes.",
         "Bring your attention to your heart center.",

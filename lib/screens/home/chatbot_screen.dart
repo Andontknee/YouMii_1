@@ -16,62 +16,78 @@ class ChatbotScreen extends StatefulWidget {
 class _ChatbotScreenState extends State<ChatbotScreen> {
   final TextEditingController _controller = TextEditingController();
   final ChatService _chatService = ChatService();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>(); // Key to open drawer
 
-  String? _currentConversationId;
+  String? _currentConversationId; // If null, we are in "New Chat" mode (not saved to DB yet)
   String _selectedPersonality = 'Friend';
   bool _isTyping = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeChat();
+    // FIX: Do NOT create a chat immediately. We wait for the first message.
+    // _currentConversationId remains null.
   }
 
-  void _initializeChat() async {
-    final newId = await _chatService.createNewChat();
-    if (mounted) {
-      setState(() {
-        _currentConversationId = newId;
-      });
-    }
-  }
-
+  // Used when clicking a chat from History
   void _loadConversation(String id) {
     setState(() {
       _currentConversationId = id;
     });
-    Navigator.pop(context);
+    Navigator.pop(context); // Closes drawer
   }
 
-  void _createNewChat() async {
-    final newId = await _chatService.createNewChat();
+  // Used when clicking "New Chat"
+  void _resetToNewChat() {
     setState(() {
-      _currentConversationId = newId;
+      _currentConversationId = null; // Just reset UI, don't create DB entry yet
     });
-    Navigator.pop(context);
+    Navigator.pop(context); // Closes drawer
   }
 
   void _handleSend() async {
-    if (_controller.text.trim().isEmpty || _currentConversationId == null) return;
-
     final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
     _controller.clear();
     setState(() => _isTyping = true);
 
-    await _chatService.sendMessage(_currentConversationId!, text, true, personality: _selectedPersonality);
+    try {
+      // FIX: Lazy Creation.
+      // If we don't have an ID yet, create the DB document NOW.
+      if (_currentConversationId == null) {
+        final newId = await _chatService.createNewChat();
+        setState(() {
+          _currentConversationId = newId;
+        });
+      }
 
-    if (mounted) setState(() => _isTyping = false);
+      // Now send the message using the valid ID
+      await _chatService.sendMessage(
+          _currentConversationId!,
+          text,
+          true,
+          personality: _selectedPersonality
+      );
+
+    } catch (e) {
+      // Handle error gently
+      debugPrint("Error sending message: $e");
+    } finally {
+      if (mounted) setState(() => _isTyping = false);
+    }
   }
 
   void _showPersonalitySelector() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: const Color(0xFF1E1E20),
       builder: (context) => Container(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Choose AI Personality", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text("Choose AI Personality", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 20),
             _buildPersonalityTile('Friend', 'Warm, supportive, and kind.', Icons.favorite),
             _buildPersonalityTile('Coach', 'Logical, action-oriented, and stoic.', Icons.sports_score),
@@ -84,16 +100,17 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
   Widget _buildPersonalityTile(String name, String desc, IconData icon) {
     final isSelected = _selectedPersonality == name;
-    final theme = Theme.of(context);
+    // final theme = Theme.of(context); // (Optional: Use custom colors below)
+    const kAccentColor = Color(0xFFA4A5F5);
 
     return ListTile(
       leading: CircleAvatar(
-        backgroundColor: isSelected ? theme.primaryColor : Colors.grey[200],
-        child: Icon(icon, color: isSelected ? Colors.white : Colors.grey),
+        backgroundColor: isSelected ? kAccentColor : Colors.grey[800],
+        child: Icon(icon, color: isSelected ? Colors.black : Colors.grey),
       ),
-      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? theme.primaryColor : Colors.black)),
-      subtitle: Text(desc),
-      trailing: isSelected ? Icon(Icons.check, color: theme.primaryColor) : null,
+      title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? kAccentColor : Colors.white)),
+      subtitle: Text(desc, style: const TextStyle(color: Colors.grey)),
+      trailing: isSelected ? const Icon(Icons.check, color: kAccentColor) : null,
       onTap: () {
         setState(() => _selectedPersonality = name);
         Navigator.pop(context);
@@ -105,29 +122,38 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    // --- COLORS ---
-    const kChatBackground = Color(0xFF131314); // Gemini Dark
+    const kChatBackground = Color(0xFF131314);
     const kSurfaceColor = Color(0xFF1E1E20);
-    const kAccentColor = Color(0xFFA4A5F5); // Periwinkle
-    const kInputFillColor = Color(0xFF282828); // Dark Grey for Input Box
+    const kAccentColor = Color(0xFFA4A5F5);
+    const kInputFillColor = Color(0xFF282828);
 
     return Scaffold(
+      key: _scaffoldKey, // Assign the key to control drawer
       backgroundColor: kChatBackground,
-
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.grey),
+        // FIX 1: Add Back Button explicit logic
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text('YouMii', style: TextStyle(color: Colors.white)),
+        centerTitle: true,
         actions: [
+          // Moved History button here since Back Button took the "Leading" spot
           IconButton(
-            icon: const Icon(Icons.psychology),
+            icon: const Icon(Icons.history, color: Colors.grey),
+            tooltip: "Chat History",
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.psychology, color: Colors.grey),
             tooltip: "Change Personality",
             onPressed: _showPersonalitySelector,
           ),
         ],
       ),
-
       drawer: Drawer(
         backgroundColor: kSurfaceColor,
         child: Column(
@@ -145,19 +171,19 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             ListTile(
               leading: const Icon(Icons.add, color: kAccentColor),
               title: const Text("New chat", style: TextStyle(color: kAccentColor, fontWeight: FontWeight.bold)),
-              onTap: _createNewChat,
+              onTap: _resetToNewChat, // Updated to use the non-saving method
             ),
             const Divider(color: Colors.white10),
-            const Padding(
-              padding: EdgeInsets.only(left: 16, top: 10, bottom: 5),
-              child: Align(alignment: Alignment.centerLeft, child: Text("Recent", style: TextStyle(color: Colors.grey, fontSize: 12))),
-            ),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: _chatService.getConversations(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                   final docs = snapshot.data!.docs;
+
+                  if (docs.isEmpty) {
+                    return const Center(child: Text("No history yet", style: TextStyle(color: Colors.grey)));
+                  }
 
                   return ListView.builder(
                     itemCount: docs.length,
@@ -177,7 +203,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                           icon: const Icon(Icons.delete_outline, size: 16, color: Colors.grey),
                           onPressed: () {
                             _chatService.deleteConversation(id);
-                            if (isActive) _initializeChat();
+                            if (isActive) _resetToNewChat();
                           },
                         ),
                       );
@@ -189,13 +215,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           ],
         ),
       ),
-
       body: Column(
         children: [
-          // --- CHAT AREA ---
           Expanded(
+            // FIX 2: Check for NULL ID. If null, show empty state immediately (don't load stream)
             child: _currentConversationId == null
-                ? const Center(child: CircularProgressIndicator())
+                ? _buildEmptyState(user?.displayName ?? 'Friend')
                 : StreamBuilder<List<ChatMessage>>(
               stream: _chatService.getMessages(_currentConversationId!),
               builder: (context, snapshot) {
@@ -204,41 +229,29 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                 }
 
                 final messages = snapshot.data ?? [];
-
-                if (messages.isEmpty) {
-                  return _buildEmptyState(user?.displayName ?? 'Friend');
-                }
+                // Double check: if messages are empty even with an ID, show mascot
+                if (messages.isEmpty) return _buildEmptyState(user?.displayName ?? 'Friend');
 
                 return ListView.builder(
                   reverse: true,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    return _ChatBubble(message: messages[index]);
-                  },
+                  itemBuilder: (context, index) => _ChatBubble(message: messages[index]),
                 );
               },
             ),
           ),
 
           if (_isTyping)
-            const Padding(
-              padding: EdgeInsets.only(left: 20, bottom: 10),
-              child: Align(alignment: Alignment.centerLeft, child: Text("YouMii is thinking...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 12))),
-            ),
+            const Padding(padding: EdgeInsets.only(left: 20, bottom: 10), child: Align(alignment: Alignment.centerLeft, child: Text("YouMii is thinking...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 12)))),
 
-          // --- INPUT AREA ---
           Container(
             padding: const EdgeInsets.all(16),
             color: kChatBackground,
             child: Column(
               children: [
-                // Container for the Capsule Shape
                 Container(
-                  decoration: BoxDecoration(
-                    color: kInputFillColor, // #282828
-                    borderRadius: BorderRadius.circular(30),
-                  ),
+                  decoration: BoxDecoration(color: kInputFillColor, borderRadius: BorderRadius.circular(30)),
                   child: Row(
                     children: [
                       const SizedBox(width: 16),
@@ -246,34 +259,24 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                         child: TextField(
                           controller: _controller,
                           textCapitalization: TextCapitalization.sentences,
-                          style: const TextStyle(color: Colors.white), // White text
+                          style: const TextStyle(color: Colors.white),
                           decoration: const InputDecoration(
                             hintText: 'Message YouMii...',
                             hintStyle: TextStyle(color: Colors.grey),
-                            // --- FIX: Explicitly set fillColor here to override Global White ---
                             filled: true,
                             fillColor: kInputFillColor,
                             border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 0, vertical: 14),
+                            contentPadding: EdgeInsets.symmetric(vertical: 14),
                           ),
                           onSubmitted: (_) => _handleSend(),
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.send_rounded, color: kAccentColor),
-                        onPressed: _handleSend,
-                      ),
+                      IconButton(icon: const Icon(Icons.send_rounded, color: kAccentColor), onPressed: _handleSend),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  "YouMii may display inaccurate info. Not a medical professional. Seek help if in crisis.",
-                  style: TextStyle(color: Colors.grey, fontSize: 10),
-                  textAlign: TextAlign.center,
-                ),
+                const Text("YouMii is an AI companion, not a medical professional.", style: TextStyle(color: Colors.grey, fontSize: 10), textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -284,20 +287,17 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
   Widget _buildEmptyState(String name) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Mascot Image
-          SizedBox(
-            height: 120,
-            width: 120,
-            child: Image.asset('assets/mascot.png', fit: BoxFit.contain),
-          ),
-          const SizedBox(height: 20),
-          Text("Hello, $name", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFFA4A5F5))),
-          const SizedBox(height: 8),
-          const Text("How can I help you today?", style: TextStyle(fontSize: 18, color: Colors.grey)),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(height: 120, width: 120, child: Image.asset('assets/mascot.png', fit: BoxFit.contain)),
+            const SizedBox(height: 20),
+            Text("Hello, $name", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFFA4A5F5))),
+            const SizedBox(height: 8),
+            const Text("How can I help you today?", style: TextStyle(fontSize: 18, color: Colors.grey)),
+          ],
+        ),
       ),
     );
   }
@@ -324,23 +324,10 @@ class _ChatBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!isUser) ...[
-              Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 12,
-                    backgroundImage: AssetImage('assets/mascot.png'),
-                    backgroundColor: Colors.transparent,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text("YouMii", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
-                ],
-              ),
+              const Row(children: [CircleAvatar(radius: 12, backgroundImage: AssetImage('assets/mascot.png'), backgroundColor: Colors.transparent), SizedBox(width: 8), Text("YouMii", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12))]),
               const SizedBox(height: 4),
             ],
-            Text(
-              message.text,
-              style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-            ),
+            Text(message.text, style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5)),
           ],
         ),
       ),

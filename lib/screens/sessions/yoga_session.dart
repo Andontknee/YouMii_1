@@ -2,395 +2,236 @@
 
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter_tts/flutter_tts.dart';
 import '../../models/yoga_model.dart';
 
 class YogaSession extends StatefulWidget {
-  final YogaSessionData sessionData;
-  const YogaSession({super.key, required this.sessionData});
+  final YogaPose pose; // FIX: Accept only one pose
+  const YogaSession({super.key, required this.pose});
 
   @override
   State<YogaSession> createState() => _YogaSessionState();
 }
 
 class _YogaSessionState extends State<YogaSession> {
-  int _currentPoseIndex = 0;
-  int _currentStepIndex = 0;
-  Timer? _timer;
-  int _currentDuration = 0;
-  bool _isSessionActive = false;
-  bool _isPaused = false;
-  bool _isPreparationPhase = true;
-  int _preparationTime = 5; // Reduced to 5 seconds for testing
+  final FlutterTts _flutterTts = FlutterTts();
 
-  YogaPose get _currentPose => widget.sessionData.poses[_currentPoseIndex];
-  YogaStep get _currentStep => _currentPose.steps[_currentStepIndex];
+  Timer? _timer;
+  int _secondsRemaining = 0;
+  bool _isTimerRunning = false;
+  bool _isPoseComplete = false;
 
   @override
   void initState() {
     super.initState();
-    _startPreparationPhase();
+    _secondsRemaining = widget.pose.durationSeconds;
+    _initTts();
   }
 
-  // FIX: Always cancel previous timer before starting new one
-  void _startPreparationPhase() {
-    _cancelTimer(); // Cancel any existing timer
-    setState(() {
-      _isPreparationPhase = true;
-      _currentDuration = _preparationTime;
-      _isSessionActive = false;
-      _isPaused = false;
-    });
-    _startTimer(_moveToExercisePhase);
+  void _initTts() async {
+    await _flutterTts.setLanguage("en-US");
   }
 
-  void _moveToExercisePhase() {
-    _cancelTimer(); // Cancel any existing timer
+  void _startTimer() {
     setState(() {
-      _isPreparationPhase = false;
-      _currentDuration = _currentStep.durationSeconds;
-      _isSessionActive = false;
-      _isPaused = false;
+      _isTimerRunning = true;
     });
-    _startTimer(_autoAdvanceToNextStep);
-  }
 
-  // FIX: Proper timer management
-  void _startTimer(VoidCallback onComplete) {
-    _cancelTimer(); // Cancel any existing timer first
-
-    setState(() {
-      _isSessionActive = true;
-      _isPaused = false;
-    });
+    _flutterTts.speak("Begin.");
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
-        _cancelTimer();
+        timer.cancel();
         return;
       }
 
       setState(() {
-        if (_currentDuration > 0) {
-          _currentDuration--;
+        if (_secondsRemaining > 0) {
+          _secondsRemaining--;
         } else {
-          _cancelTimer(); // Properly cancel when done
-          _isSessionActive = false;
-          onComplete();
+          // --- TIMER FINISHED ---
+          timer.cancel();
+          _isTimerRunning = false;
+          _isPoseComplete = true;
+          _flutterTts.speak("Pose complete. Great job.");
         }
       });
     });
   }
 
-  // FIX: Single method to cancel timer
-  void _cancelTimer() {
+  void _stopAndExit() {
     _timer?.cancel();
-    _timer = null;
-  }
-
-  void _pauseTimer() {
-    _cancelTimer();
-    setState(() {
-      _isPaused = true;
-    });
-  }
-
-  void _resumeTimer() {
-    if (_isPreparationPhase) {
-      _startTimer(_moveToExercisePhase);
-    } else {
-      _startTimer(_autoAdvanceToNextStep);
-    }
-  }
-
-  void _autoAdvanceToNextStep() {
-    _cancelTimer(); // Cancel timer before navigation
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        _moveToNextStep();
-      }
-    });
-  }
-
-  void _moveToNextStep() {
-    _cancelTimer(); // Cancel timer before state changes
-
-    if (_currentStepIndex < _currentPose.steps.length - 1) {
-      setState(() {
-        _currentStepIndex++;
-      });
-      _startPreparationPhase();
-    } else if (_currentPoseIndex < widget.sessionData.poses.length - 1) {
-      setState(() {
-        _currentPoseIndex++;
-        _currentStepIndex = 0;
-      });
-      _startPreparationPhase();
-    } else {
-      _completeSession();
-    }
-  }
-
-  void _moveToPreviousStep() {
-    _cancelTimer(); // Cancel timer before navigation
-
-    if (!_isPreparationPhase && _currentDuration == _currentStep.durationSeconds) {
-      setState(() {
-        _isPreparationPhase = true;
-        _currentDuration = _preparationTime;
-      });
-    } else if (_currentStepIndex > 0) {
-      setState(() {
-        _currentStepIndex--;
-      });
-      _startPreparationPhase();
-    } else if (_currentPoseIndex > 0) {
-      setState(() {
-        _currentPoseIndex--;
-        _currentStepIndex = _currentPose.steps.length - 1;
-      });
-      _startPreparationPhase();
-    } else {
-      _startPreparationPhase();
-    }
-  }
-
-  void _completeSession() {
-    _cancelTimer();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Session Complete!'),
-          content: Text('Congratulations! You completed "${widget.sessionData.title}"'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: const Text('Finish'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  String _formatDuration(int seconds) {
-    final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
-    final secs = (seconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$secs';
-  }
-
-  double get _overallProgress {
-    final totalSteps = widget.sessionData.poses.fold(0, (sum, pose) => sum + pose.steps.length);
-    int completedSteps = 0;
-
-    for (int i = 0; i < _currentPoseIndex; i++) {
-      completedSteps += widget.sessionData.poses[i].steps.length;
-    }
-    completedSteps += _currentStepIndex;
-
-    return totalSteps > 0 ? completedSteps / totalSteps : 0;
+    _flutterTts.stop();
+    Navigator.pop(context);
   }
 
   @override
   void dispose() {
-    _cancelTimer(); // Use our cancel method
+    _timer?.cancel();
+    _flutterTts.stop();
     super.dispose();
+  }
+
+  String _formatTime(int seconds) {
+    final m = (seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return "$m:$s";
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final totalPoses = widget.sessionData.poses.length;
-    final totalStepsInCurrentPose = _currentPose.steps.length;
-    final isFirstStep = _currentPoseIndex == 0 && _currentStepIndex == 0;
-    final isLastStep = _currentPoseIndex == widget.sessionData.poses.length - 1 &&
-        _currentStepIndex == _currentPose.steps.length - 1;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(widget.sessionData.title, style: theme.appBarTheme.titleTextStyle),
+        title: Text(widget.pose.title),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
         actions: [
-          if (_isSessionActive || _isPaused)
-            IconButton(
-              icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
-              onPressed: _isPaused ? _resumeTimer : _pauseTimer,
-              tooltip: _isPaused ? 'Resume' : 'Pause',
-            ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.grey),
+            onPressed: _stopAndExit,
+          )
         ],
       ),
-      body: Column(
-        children: [
-          LinearProgressIndicator(
-            value: _overallProgress,
-            backgroundColor: Colors.grey[800],
-            color: theme.primaryColor,
-            minHeight: 4,
-          ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
+        child: Column(
+          children: [
+            // --- MAIN CONTENT CARD ---
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 5),
+                    )
+                  ],
+                  // Visual cue: Green border when complete
+                  border: _isPoseComplete ? Border.all(color: Colors.green, width: 3) : null,
+                ),
+                child: Column(
+                  children: [
+                    // 1. IMAGE AREA
+                    Expanded(
+                      flex: 4,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                        child: Container(
+                          width: double.infinity,
+                          color: Colors.grey[100],
+                          child: Image.asset(
+                            widget.pose.imageAsset,
+                            fit: BoxFit.contain,
+                            errorBuilder: (c, e, s) => Icon(Icons.self_improvement, size: 80, color: Colors.grey[400]),
+                          ),
+                        ),
+                      ),
+                    ),
 
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    children: [
-                      Text(
-                        'Pose ${_currentPoseIndex + 1} of $totalPoses',
-                        style: theme.textTheme.titleMedium!.copyWith(
-                          color: theme.primaryColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _currentPose.title,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.headlineSmall!.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Step ${_currentStepIndex + 1} of $totalStepsInCurrentPose',
-                        style: theme.textTheme.titleMedium!.copyWith(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-
-                  Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                    // 2. TEXT & TIMER AREA
+                    Expanded(
+                      flex: 5,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              _currentStep.instruction,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.titleLarge!.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              _formatDuration(_currentDuration),
-                              style: theme.textTheme.displayLarge!.copyWith(
-                                fontSize: 64,
-                                fontWeight: FontWeight.w300,
-                                color: _isPreparationPhase ? Colors.orange : theme.primaryColor,
-                              ),
-                            ),
-                            if (_isPreparationPhase)
-                              Text(
-                                'Preparation - Starting in...',
-                                style: theme.textTheme.bodyMedium!.copyWith(
-                                  color: Colors.orange,
+                            Column(
+                              children: [
+                                Text(
+                                  widget.pose.title,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
                                 ),
-                              ),
+                                const SizedBox(height: 12),
+                                // Scrollable description
+                                SizedBox(
+                                  height: 80,
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      widget.pose.description,
+                                      textAlign: TextAlign.center,
+                                      style: theme.textTheme.bodyMedium!.copyWith(color: Colors.grey[700], height: 1.4),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // --- CIRCULAR TIMER ---
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 120,
+                                  height: 120,
+                                  child: CircularProgressIndicator(
+                                    value: _secondsRemaining / widget.pose.durationSeconds,
+                                    strokeWidth: 8,
+                                    backgroundColor: Colors.grey[200],
+                                    color: _isPoseComplete ? Colors.green : theme.primaryColor,
+                                  ),
+                                ),
+                                Text(
+                                  _isPoseComplete ? "Done" : _formatTime(_secondsRemaining),
+                                  style: theme.textTheme.headlineMedium!.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: _isPoseComplete ? Colors.green : theme.primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (!_isSessionActive && !_isPaused && !_isPreparationPhase)
-                        ElevatedButton(
-                          onPressed: () => _startTimer(_autoAdvanceToNextStep),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            backgroundColor: theme.primaryColor,
-                          ),
-                          child: const Text(
-                            'START STEP',
-                            style: TextStyle(fontSize: 16, color: Colors.white),
-                          ),
-                        ),
-
-                      if ((_isSessionActive || _isPaused) && !_isPreparationPhase) ...[
-                        Row(
-                          children: [
-                            if (!isFirstStep)
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _moveToPreviousStep,
-                                  child: const Text('PREVIOUS'),
-                                ),
-                              ),
-                            if (!isFirstStep) const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _moveToNextStep,
-                                child: Text(isLastStep ? 'FINISH' : 'SKIP TO NEXT'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      if (_isPreparationPhase && !_isSessionActive && !_isPaused)
-                        ElevatedButton(
-                          onPressed: _moveToExercisePhase,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            backgroundColor: Colors.orange,
-                          ),
-                          child: const Text(
-                            'START NOW',
-                            style: TextStyle(fontSize: 16, color: Colors.white),
-                          ),
-                        ),
-
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: _showEndSessionDialog,
-                        child: Text(
-                          'End Session',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  void _showEndSessionDialog() {
-    _cancelTimer(); // Cancel timer when ending session
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('End Session?'),
-        content: const Text('Are you sure you want to end this yoga session?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              _cancelTimer();
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('End Session'),
-          ),
-        ],
+            const SizedBox(height: 30),
+
+            // --- BOTTOM BUTTONS ---
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: _isPoseComplete
+                  ? ElevatedButton.icon(
+                onPressed: _stopAndExit,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                icon: const Icon(Icons.check, color: Colors.white),
+                label: const Text("Finish Session", style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+              )
+                  : ElevatedButton(
+                onPressed: _isTimerRunning ? null : _startTimer,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isTimerRunning ? Colors.grey[300] : theme.primaryColor,
+                ),
+                child: Text(
+                  _isTimerRunning ? "Session in Progress..." : "Start Session",
+                  style: TextStyle(fontSize: 18, color: _isTimerRunning ? Colors.grey : Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            if (!_isTimerRunning && !_isPoseComplete)
+              TextButton(
+                onPressed: _stopAndExit,
+                child: Text("Cancel", style: TextStyle(color: Colors.grey[600])),
+              ),
+            if (_isTimerRunning)
+              const SizedBox(height: 48), // Spacer
+          ],
+        ),
       ),
     );
   }

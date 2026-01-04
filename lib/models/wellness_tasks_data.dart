@@ -23,6 +23,7 @@ class WellnessTasksData {
     "Avoid sugary drinks for the rest of the day",
     "Write down one goal for tomorrow",
     "Do 10 jumping jacks",
+    "Watch a funny video to laugh",
     "Practice good posture for the next hour",
   ];
 

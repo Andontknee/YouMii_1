@@ -51,6 +51,7 @@ dependencies:
   image_picker: ^1.2.1
   speech_to_text: ^7.3.0
   flutter_tts: ^4.2.3
+  flutter_dotenv: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -79,10 +80,13 @@ flutter:
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
   assets:
+    - .env
     - assets/
     - assets/covers/
     - assets/icons/
     - assets/mascot.png
+    - assets/yoga/
+
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

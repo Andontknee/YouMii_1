@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
-import 'package:youmii/firebase_options.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
+import 'package:youmii/firebase_options.dart'; // Ensure this file exists
 
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/registration_screen.dart';
@@ -17,7 +18,6 @@ const Color kPrimaryLavender = Color(0xFF906DD1);
 const Color kDeepLavender = Color(0xFF8A75AE);
 
 // Backgrounds
-// --- FIX: RESTORED PALE BLUE BACKGROUND ---
 const Color kAppBackground = Color(0xFFEBF4FA);
 const Color kCardSurface = Color(0xFFB099C8);
 
@@ -28,11 +28,27 @@ const Color kTextSecondary = Colors.black87;
 // Accents
 const Color kAccentError = Color(0xFFDFA8A8);
 
-void main() async {
+// --- MAIN ENTRY POINT ---
+Future<void> main() async {
+  // 1. Ensure Flutter bindings are ready
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. Load the secret keys from .env
+  // We try to load this BEFORE Firebase or the App starts.
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("⚠️ CRITICAL ERROR: .env file not found or couldn't be loaded: $e");
+    // If this fails, ChatService will likely crash the app later.
+    // Make sure '.env' is added to your pubspec.yaml assets!
+  }
+
+  // 3. Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 4. Run the App
   runApp(const MyApp());
 }
 
@@ -51,7 +67,7 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.light,
 
         // 1. Global Colors
-        scaffoldBackgroundColor: kAppBackground, // Ensure this is used
+        scaffoldBackgroundColor: kAppBackground,
         primaryColor: kPrimaryLavender,
         cardColor: kCardSurface,
         canvasColor: kAppBackground,
@@ -87,7 +103,11 @@ class MyApp extends StatelessWidget {
           elevation: 0,
           centerTitle: true,
           iconTheme: IconThemeData(color: kTextPrimary),
-          titleTextStyle: TextStyle(color: kTextPrimary, fontSize: 20, fontWeight: FontWeight.w600),
+          titleTextStyle: TextStyle(
+            color: kTextPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
           systemOverlayStyle: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: Brightness.dark,
@@ -147,7 +167,7 @@ class MyApp extends StatelessWidget {
 
         // Bottom Navigation Bar
         bottomAppBarTheme: const BottomAppBarThemeData(
-          color: Colors.white, // --- FIX: FORCE WHITE ---
+          color: Colors.white,
           elevation: 10,
           shadowColor: Colors.black12,
           surfaceTintColor: Colors.white,
